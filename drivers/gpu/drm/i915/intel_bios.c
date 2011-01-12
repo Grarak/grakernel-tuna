@@ -272,6 +272,20 @@ static int intel_bios_ssc_frequency(struct drm_device *dev,
 	}
 }
 
+static int intel_bios_ssc_frequency(struct drm_device *dev,
+				    bool alternate)
+{
+	switch (INTEL_INFO(dev)->gen) {
+	case 2:
+		return alternate ? 66 : 48;
+	case 3:
+	case 4:
+		return alternate ? 100 : 96;
+	default:
+		return alternate ? 100 : 120;
+	}
+}
+
 static void
 parse_general_features(struct drm_i915_private *dev_priv,
 		       struct bdb_header *bdb)
