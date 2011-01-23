@@ -57,6 +57,11 @@ static int default_x86_32_early_logical_apicid(int cpu)
 	return 1 << cpu;
 }
 
+static int default_x86_32_early_logical_apicid(int cpu)
+{
+	return 1 << cpu;
+}
+
 static void setup_apic_flat_routing(void)
 {
 #ifdef CONFIG_X86_IO_APIC
