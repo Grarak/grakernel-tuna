@@ -1930,6 +1930,8 @@ ath5k_beacon_send(struct ath5k_softc *sc)
 
 	trace_ath5k_tx(sc, bf->skb, &sc->txqs[sc->bhalq]);
 
+	trace_ath5k_tx(sc, bf->skb, &sc->txqs[sc->bhalq]);
+
 	ath5k_hw_set_txdp(ah, sc->bhalq, bf->daddr);
 	ath5k_hw_start_tx_dma(ah, sc->bhalq);
 	ATH5K_DBG(sc, ATH5K_DEBUG_BEACON, "TXDP[%u] = %llx (%p)\n",
