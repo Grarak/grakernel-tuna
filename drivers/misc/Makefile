@@ -63,3 +63,4 @@ obj-$(CONFIG_GCBV)		+= gcx/gcbv/
 obj-$(CONFIG_GCIOCTL)		+= gcx/gcioctl/
 obj-$(CONFIG_CACHE2DMANAGER)	+= cache-2dmanager/
 obj-y				+= mpu/
+obj-y				+= inv_mpu/
