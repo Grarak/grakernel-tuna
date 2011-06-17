@@ -64,3 +64,4 @@ obj-$(CONFIG_GCIOCTL)		+= gcx/gcioctl/
 obj-$(CONFIG_CACHE2DMANAGER)	+= cache-2dmanager/
 obj-y				+= mpu/
 obj-y				+= inv_mpu/
+obj-$(CONFIG_SEC_MODEM)		+= modem_if/
