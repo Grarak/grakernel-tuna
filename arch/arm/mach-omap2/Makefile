@@ -288,7 +288,6 @@ obj-$(CONFIG_MACH_NOTLE)		+= board-notle.o \
 obj-$(CONFIG_MACH_TUNA)			+= board-tuna.o \
 					   hsmmc.o \
 					   omap_phy_internal.o
-obj-$(CONFIG_MACH_TUNA)			+= board-tuna-android-usb.o
 obj-$(CONFIG_MACH_TUNA)			+= board-tuna-display.o
 obj-$(CONFIG_MACH_TUNA)			+= board-tuna-input.o
 obj-$(CONFIG_MACH_TUNA)			+= board-tuna-power.o
