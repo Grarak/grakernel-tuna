@@ -254,6 +254,7 @@ struct cfs_bandwidth {
 	ktime_t period;
 	u64 quota, runtime;
 	s64 hierarchal_quota;
+	u64 runtime_expires;
 
 	int idle, timer_active;
 	struct hrtimer period_timer;
@@ -389,6 +390,11 @@ struct cfs_rq {
 	u64 load_stamp, load_last, load_unacc_exec_time;
 
 	unsigned long load_contribution;
+#endif
+#ifdef CONFIG_CFS_BANDWIDTH
+	int runtime_enabled;
+	u64 runtime_expires;
+	s64 runtime_remaining;
 #endif
 #endif
 };
@@ -9259,8 +9265,8 @@ static int tg_set_cfs_bandwidth(struct task_group *tg, u64 period, u64 quota)
 	raw_spin_lock_irq(&cfs_b->lock);
 	cfs_b->period = ns_to_ktime(period);
 	cfs_b->quota = quota;
-	cfs_b->runtime = quota;
 
+	__refill_cfs_bandwidth_runtime(cfs_b);
 	/* restart the period timer (if active) to handle new period expiry */
 	if (runtime_enabled && cfs_b->timer_active) {
 		/* force a reprogram */
