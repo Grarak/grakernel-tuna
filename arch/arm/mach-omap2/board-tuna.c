@@ -1327,6 +1327,9 @@ void omap_kexec_hardboot(void)
      * not support the hardboot jump. */
     arm_pm_restart('c', NULL);
 }
+
+#ifdef CONFIG_CPU_FREQ_GOV_ONDEMAND_2_PHASE
+int set_two_phase_freq(int cpufreq);
 #endif
 
 static void __init tuna_init(void)
@@ -1379,6 +1382,11 @@ static void __init tuna_init(void)
 		omap_mux_init_signal("mcspi4_somi", OMAP_MUX_MODE0);
 		omap_mux_init_signal("mcspi4_cs0", OMAP_MUX_MODE0);
 	}
+
+
+#ifdef CONFIG_CPU_FREQ_GOV_ONDEMAND_2_PHASE
+	set_two_phase_freq(920000);
+#endif
 
 	tuna_wlan_init();
 	tuna_audio_init();
