@@ -191,7 +191,13 @@ int unshare_nsproxy_namespaces(unsigned long unshare_flags,
 			       CLONE_NEWNET)))
 		return 0;
 
-	if (!capable(CAP_SYS_ADMIN))
+	/* We require either no_new_privs or CAP_SYS_ADMIN for all modes */
+	if (!current->no_new_privs && !capable(CAP_SYS_ADMIN))
+		return -EPERM;
+
+	/* NEWNS and NEWNET always require CAP_SYS_ADMIN. */
+	if ((unshare_flags & (CLONE_NEWNS | CLONE_NEWNET)) &&
+	    !capable(CAP_SYS_ADMIN))
 		return -EPERM;
 
 	*new_nsp = create_new_namespaces(unshare_flags, current,
