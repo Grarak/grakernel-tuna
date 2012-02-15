@@ -425,4 +425,13 @@ config TUNA_ASRAM
 	  max 50 MB is safe and makes 1080p camera
 	  functionality working.
 
+config OMAP_OVERRIDE_MPUTRIM
+	bool "Override factory-set trim value for MPU DPLL clock"
+	default n
+	help
+	  Override factory-set trim value for MPU DPLL to allow locking at 
+	  rates >2.4GHz (required for MPU frequencies >1.2GHz).
+
+endmenu
+
 endif
