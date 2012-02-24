@@ -4,7 +4,7 @@
 
 # Common support
 obj-y := id.o io.o control.o mux.o devices.o serial.o gpmc.o timer-gp.o pm.o \
-	 common.o gpio.o dma.o wd_timer.o omap_pmic.o dmtimer.o
+	 common.o gpio.o dma.o wd_timer.o omap_pmic.o dmtimer.o i2c.o
 
 omap-2-3-common				= irq.o sdrc.o
 hwmod-common				= omap_hwmod.o \
@@ -182,9 +182,6 @@ obj-$(CONFIG_OMAP_MBOX_FWK)		+= mailbox_mach.o
 mailbox_mach-objs			:= mailbox.o
 
 obj-$(CONFIG_OMAP_IOMMU)		+= iommu2.o omap-iommu.o
-
-i2c-omap-$(CONFIG_I2C_OMAP)		:= i2c.o
-obj-y					+= $(i2c-omap-m) $(i2c-omap-y)
 
 ifneq ($(CONFIG_TIDSPBRIDGE),)
 obj-y					+= dsp.o
