@@ -603,4 +603,10 @@ config FSYNC_CONTROL
         help
           Say Y here to enable FSync Control
 
+config SOUND_CONTROL
+	bool "Support for Sound Control"
+	default y
+	help
+	  Say Y here to enable Sound Control
+
 endif # MISC_DEVICES
