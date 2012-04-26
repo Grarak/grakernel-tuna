@@ -96,6 +96,30 @@ static struct omap_device_pm_latency omap_emif_latency[] = {
  */
 #define EMIF_ERRATUM_POWER_DOWN_NOT_EFFICIENT_i743	BIT(1)
 
+/*
+ * TI Errata i743 - LPDDR2 Power-Down State is Not Efficient
+ * IMPACTED: OMAP4430 and OMAP4460 all revisions
+ * The EMIF supports power-down state for low power. The EMIF automatically
+ * puts the SDRAM into power-down after the memory is not accessed for a
+ * defined number of cycles and the EMIF_PWR_MGMT_CTRL[10:8] REG_LP_MODE bit
+ * field is set to 0x4.
+ * As the EMIF supports automatic output impedance calibration, a ZQ
+ * calibration long command is issued every time it exits active power-down
+ * and precharge power-down modes. The EMIF waits and blocks any other command
+ * during this calibration.
+ * The EMIF does not allow selective disabling of ZQ calibration upon exit of
+ * power-down mode. Due to very short periods of power-down cycles,
+ * ZQ calibration overhead creates bandwidth issues and increases overall
+ * system power consumption. On the other hand, issuing ZQ calibration
+ * long commands when exiting self-refresh is still required.
+ *
+ * W/A: Because there is no power consumption benefit of the power-down due to
+ * the calibration and there is a performance risk, the guideline is to not
+ * allow power-down state and, therefore, to not have set the
+ * EMIF_PWR_MGMT_CTRL[10:8] REG_LP_MODE bit field to 0x4.
+ */
+#define EMIF_ERRATUM_POWER_DOWN_NOT_EFFICIENT_i743	BIT(1)
+
 static u32 emif_errata;
 #define is_emif_erratum(erratum) (emif_errata & EMIF_ERRATUM_##erratum)
 
