@@ -139,6 +139,7 @@ extern void vfp_flush_hwstate(struct thread_info *);
 #define TIF_NEED_RESCHED	1
 #define TIF_NOTIFY_RESUME	2	/* callback before returning to user */
 #define TIF_SYSCALL_TRACE	8
+#define TIF_SYSCALL_RESTARTSYS	10
 #define TIF_POLLING_NRFLAG	16
 #define TIF_USING_IWMMXT	17
 #define TIF_MEMDIE		18	/* is terminating due to OOM killer */
@@ -155,6 +156,11 @@ extern void vfp_flush_hwstate(struct thread_info *);
 #define _TIF_FREEZE		(1 << TIF_FREEZE)
 #define _TIF_RESTORE_SIGMASK	(1 << TIF_RESTORE_SIGMASK)
 #define _TIF_SECCOMP		(1 << TIF_SECCOMP)
+#define _TIF_SYSCALL_RESTARTSYS	(1 << TIF_SYSCALL_RESTARTSYS)
+
+/* Checks for any syscall work in entry-common.S */
+#define _TIF_SYSCALL_WORK (_TIF_SYSCALL_TRACE | _TIF_SYSCALL_AUDIT | \
+			   _TIF_SYSCALL_RESTARTSYS)
 
 /*
  * Change these and you break ASM code in entry-common.S
