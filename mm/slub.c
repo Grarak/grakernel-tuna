@@ -2319,7 +2319,7 @@ static unsigned long calculate_alignment(unsigned long flags,
 }
 
 static void
-init_kmem_cache_node(struct kmem_cache_node *n, struct kmem_cache *s)
+init_kmem_cache_node(struct kmem_cache_node *n)
 {
 	n->nr_partial = 0;
 	spin_lock_init(&n->list_lock);
@@ -2389,7 +2389,7 @@ static void early_kmem_cache_node_alloc(int node)
 	init_object(kmem_cache_node, n, SLUB_RED_ACTIVE);
 	init_tracking(kmem_cache_node, n);
 #endif
-	init_kmem_cache_node(n, kmem_cache_node);
+	init_kmem_cache_node(n);
 	inc_slabs_node(kmem_cache_node, node, page->objects);
 
 	/*
@@ -2436,7 +2436,7 @@ static int init_kmem_cache_nodes(struct kmem_cache *s)
 		}
 
 		s->node[node] = n;
-		init_kmem_cache_node(n, s);
+		init_kmem_cache_node(n);
 	}
 	return 1;
 }
@@ -3119,7 +3119,7 @@ static int slab_mem_going_online_callback(void *arg)
 			ret = -ENOMEM;
 			goto out;
 		}
-		init_kmem_cache_node(n, s);
+		init_kmem_cache_node(n);
 		s->node[nid] = n;
 	}
 out:
