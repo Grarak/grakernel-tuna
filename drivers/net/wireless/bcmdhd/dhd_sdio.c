@@ -6960,3 +6960,8 @@ dhd_bus_membytes(dhd_pub_t *dhdp, bool set, uint32 address, uint8 *data, uint si
 	bus = dhdp->bus;
 	return dhdsdio_membytes(bus, set, address, data, size);
 }
+
+void
+dhd_bus_set_drive_strength(dhd_pub_t *dhdp, uint drive_strength) {
+	si_sdiod_drive_strength_init(dhdp->bus->sih, dhdp->bus->dhd->osh, drive_strength);
+}
