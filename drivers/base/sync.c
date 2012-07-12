@@ -355,6 +355,7 @@ static int sync_fence_merge_pts(struct sync_fence *dst, struct sync_fence *src)
 					new_pt->fence = dst;
 					list_replace(&dst_pt->pt_list,
 						     &new_pt->pt_list);
+					sync_pt_activate(new_pt);
 					sync_pt_free(dst_pt);
 				}
 				collapsed = true;
@@ -370,6 +371,7 @@ static int sync_fence_merge_pts(struct sync_fence *dst, struct sync_fence *src)
 
 			new_pt->fence = dst;
 			list_add(&new_pt->pt_list, &dst->pt_list_head);
+			sync_pt_activate(new_pt);
 		}
 	}
 
@@ -525,56 +527,6 @@ static void sync_fence_signal_pt(struct sync_pt *pt)
 		wake_up(&fence->wq);
 	}
 }
-
-int sync_fence_wait_async(struct sync_fence *fence,
-			  struct sync_fence_waiter *waiter)
-{
-	unsigned long flags;
-	int err = 0;
-
-	spin_lock_irqsave(&fence->waiter_list_lock, flags);
-
-	if (fence->status) {
-		err = fence->status;
-		goto out;
-	}
-
-	list_add_tail(&waiter->waiter_list, &fence->waiter_list_head);
-out:
-	spin_unlock_irqrestore(&fence->waiter_list_lock, flags);
-
-	return err;
-}
-EXPORT_SYMBOL(sync_fence_wait_async);
-
-int sync_fence_cancel_async(struct sync_fence *fence,
-			     struct sync_fence_waiter *waiter)
-{
-	struct list_head *pos;
-	struct list_head *n;
-	unsigned long flags;
-	int ret = -ENOENT;
-
-	spin_lock_irqsave(&fence->waiter_list_lock, flags);
-	/*
-	 * Make sure waiter is still in waiter_list because it is possible for
-	 * the waiter to be removed from the list while the callback is still
-	 * pending.
-	 */
-	list_for_each_safe(pos, n, &fence->waiter_list_head) {
-		struct sync_fence_waiter *list_waiter =
-			container_of(pos, struct sync_fence_waiter,
-				     waiter_list);
-		if (list_waiter == waiter) {
-			list_del(pos);
-			ret = 0;
-			break;
-		}
-	}
-	spin_unlock_irqrestore(&fence->waiter_list_lock, flags);
-	return ret;
-}
-EXPORT_SYMBOL(sync_fence_cancel_async);
 
 static bool sync_fence_check(struct sync_fence *fence)
 {
