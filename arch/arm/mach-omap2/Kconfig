@@ -436,6 +436,13 @@ config OMAP_REGULATOR_VOLTCHANGE
 	help
 	  Allow voltage changes for regulators.
 
+config RQ_STATS
+        bool "Enable Run queue statistics"
+        default n
+        help
+         Select this to enable scheduler rune queue statistic
+         collections
+
 endmenu
 
 endif
