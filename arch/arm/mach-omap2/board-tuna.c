@@ -1365,6 +1365,9 @@ void omap_kexec_hardboot(void)
 #ifdef CONFIG_CPU_FREQ_GOV_ONDEMAND_2_PHASE
 int set_two_phase_freq(int cpufreq);
 #endif
+#ifdef CONFIG_CPU_FREQ_GOV_INTELLIDEMAND
+int id_set_two_phase_freq(int cpufreq);
+#endif
 
 static void __init tuna_init(void)
 {
@@ -1419,9 +1422,11 @@ static void __init tuna_init(void)
 
 
 #ifdef CONFIG_CPU_FREQ_GOV_ONDEMAND_2_PHASE
-	set_two_phase_freq(1060000);
+	set_two_phase_freq(920000);
 #endif
-
+#ifdef CONFIG_CPU_FREQ_GOV_INTELLIDEMAND
+	id_set_two_phase_freq(920000);
+#endif
 	tuna_wlan_init();
 	tuna_audio_init();
 	tuna_i2c_init();
