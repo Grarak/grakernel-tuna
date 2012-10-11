@@ -69,6 +69,7 @@
 #include <linux/slab.h>
 #include <linux/perf_event.h>
 #include <linux/random.h>
+#include <linux/boottime.h>
 
 #include <asm/io.h>
 #include <asm/bugs.h>
@@ -666,6 +667,8 @@ int __init_or_module do_one_initcall(initcall_t fn)
 	int count = preempt_count();
 	int ret;
 
+	boottime_mark_symbolic(fn);
+
 	if (initcall_debug)
 		ret = do_one_initcall_debug(fn);
 	else
@@ -742,6 +745,7 @@ static noinline int init_post(void)
 {
 	/* need to finish all async __init code before freeing the memory */
 	async_synchronize_full();
+	boottime_deactivate();
 	free_initmem();
 	mark_rodata_ro();
 	system_state = SYSTEM_RUNNING;
@@ -801,6 +805,7 @@ static int __init kernel_init(void * unused)
 
 	do_pre_smp_initcalls();
 	lockup_detector_init();
+	boottime_system_up();
 
 	smp_init();
 	sched_init_smp();
@@ -823,6 +828,7 @@ static int __init kernel_init(void * unused)
 
 	if (sys_access((const char __user *) ramdisk_execute_command, 0) != 0) {
 		ramdisk_execute_command = NULL;
+		boottime_mark("mount+0x0/0x0");
 		prepare_namespace();
 	}
 
