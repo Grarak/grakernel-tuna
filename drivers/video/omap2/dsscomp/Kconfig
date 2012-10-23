@@ -10,8 +10,8 @@ menuconfig DSSCOMP
 
 config DSSCOMP_DEBUG_LOG
 	bool "Log event timestamps in debugfs"
-	default y
-	depends on DEBUG_FS
+	default n
+	depends on DEBUG_FS && NODEBUG
 
 	help
 	  Takes timestamp for each callback and state transition, and
