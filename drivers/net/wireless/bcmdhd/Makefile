@@ -13,6 +13,7 @@ DHDCFLAGS = -Wall -Wstrict-prototypes -Dlinux -DBCMDRIVER                     \
 	-DESCAN_RESULT_PATCH -DPASS_ARP_PACKET                                \
 	-DDHD_DONOT_FORWARD_BCMEVENT_AS_NETWORK_PKT                           \
 	-DPREFER_ASSOCIATION_5G -DBCM4330_CHIP                                \
+	-DDHD_USE_EARLYSUSPEND                                                \
 	-Idrivers/net/wireless/bcmdhd -Idrivers/net/wireless/bcmdhd/include
 
 # -DVSDB -DHT40_GO -DPROP_TXSTATUS -DCUSTOM_SDIO_F2_BLKSIZE=128 -DSDIO_CRC_ERROR_FIX 
