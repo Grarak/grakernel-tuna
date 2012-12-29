@@ -80,7 +80,6 @@ static struct omap_dss_device tuna_oled_device = {
 	.type			= OMAP_DISPLAY_TYPE_DSI,
 	.data			= &tuna_oled_data,
 	.phy.dsi		= {
-		.type		= OMAP_DSS_DSI_TYPE_VIDEO_MODE,
 		.clk_lane	= 1,
 		.clk_pol	= 0,
 		.data1_lane	= 2,
@@ -137,17 +136,6 @@ static struct omap_dss_board_info prelunchbox_dss_data = {
 	.default_device	= &tuna_lcd_device,
 };
 
-static struct omapfb_platform_data tuna_fb_pdata = {
-	.mem_desc = {
-		.region_cnt = 1,
-		.region = {
-			[0] = {
-				.size = TUNA_FB_RAM_SIZE,
-			},
-		},
-	},
-};
-
 #define MUX_DISPLAY_OUT OMAP_PIN_OUTPUT | OMAP_MUX_MODE5
 void __init omap4_tuna_display_init(void)
 {
@@ -198,6 +186,5 @@ void __init omap4_tuna_display_init(void)
 	}
 
 	omap_vram_set_sdram_vram(TUNA_FB_RAM_SIZE, 0);
-	omapfb_set_platform_data(&tuna_fb_pdata);
 	omap_display_init(dss_data);
 }

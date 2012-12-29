@@ -66,24 +66,20 @@ static int charger_is_charging(void)
 	return !gpio_get_value(GPIO_CHARGING_N);
 }
 
-static const __initdata struct resource charger_resources[] = {
-	{
+static __initdata struct resource charger_resources[] = {
+	[0] = {
 		.name = "ac",
-		.start = OMAP_GPIO_IRQ(GPIO_TA_NCONNECTED),
-		.end = OMAP_GPIO_IRQ(GPIO_TA_NCONNECTED),
 		.flags = IORESOURCE_IRQ |
 			IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING,
 	},
-	{
+	[1] = {
 		.name = "usb",
-		.start = OMAP_GPIO_IRQ(GPIO_TA_NCONNECTED),
-		.end = OMAP_GPIO_IRQ(GPIO_TA_NCONNECTED),
 		.flags = IORESOURCE_IRQ |
 			IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING,
 	}
 };
 
-static const __initdata struct pda_power_pdata charger_pdata = {
+static __initdata struct pda_power_pdata charger_pdata = {
 	.init = charger_init,
 	.exit = charger_exit,
 	.is_ac_online = charger_is_ac_online,
@@ -98,7 +94,7 @@ static struct max17040_platform_data max17043_pdata = {
 	.charger_enable = charger_is_charging,
 };
 
-static const __initdata struct i2c_board_info max17043_i2c[] = {
+static __initdata struct i2c_board_info max17043_i2c[] = {
 	{
 		I2C_BOARD_INFO("max17040", (0x6C >> 1)),
 		.platform_data = &max17043_pdata,
@@ -109,7 +105,7 @@ void __init omap4_tuna_power_init(void)
 {
 	struct platform_device *pdev;
 	int status;
-
+#if 0
 	if (omap4_tuna_final_gpios()) {
 		/* Vsel0 = gpio, vsel1 = gnd */
 		//status = omap_tps6236x_board_setup(true, TPS62361_GPIO, -1,
@@ -117,6 +113,7 @@ void __init omap4_tuna_power_init(void)
 		//if (status)
 		//	pr_err("TPS62361 initialization failed: %d\n", status);
 	}
+#endif
 
 	if (omap4_tuna_get_revision() == TUNA_REV_PRE_LUNCHBOX) {
 		charger_gpios[0].gpio = 11;
@@ -133,6 +130,12 @@ void __init omap4_tuna_power_init(void)
 	pdev = platform_device_register_resndata(NULL, "pda-power", -1,
 		charger_resources, ARRAY_SIZE(charger_resources),
 		&charger_pdata, sizeof(charger_pdata));
+
+	charger_resources[0].start = gpio_to_irq(GPIO_TA_NCONNECTED);
+	charger_resources[0].end = gpio_to_irq(GPIO_TA_NCONNECTED);
+
+	charger_resources[1].start = gpio_to_irq(GPIO_TA_NCONNECTED);
+	charger_resources[1].end = gpio_to_irq(GPIO_TA_NCONNECTED);
 
 	i2c_register_board_info(4, max17043_i2c, ARRAY_SIZE(max17043_i2c));
 }

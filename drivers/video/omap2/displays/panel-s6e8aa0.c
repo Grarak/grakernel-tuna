@@ -73,12 +73,6 @@ struct s6e8aa0_data {
 	unsigned long hw_guard_wait;	/* max guard time in jiffies */
 
 	atomic_t do_update;
-	struct {
-		u16 x;
-		u16 y;
-		u16 w;
-		u16 h;
-	} update_region;
 
 	bool cabc_broken;
 	unsigned cabc_mode;
@@ -332,7 +326,7 @@ static int s6e8aa0_probe(struct omap_dss_device *dssdev)
 	dssdev->panel.config = OMAP_DSS_LCD_TFT;
 	dssdev->panel.timings = s6e8aa0_timings;
 
-	dssdev->ctrl.pixel_size = 24;
+	dssdev->panel.dsi_pix_fmt = OMAP_DSS_DSI_FMT_RGB888;
 	dssdev->panel.acbi = 0;
 	dssdev->panel.acb = 40;
 
@@ -429,7 +423,11 @@ static int s6e8aa0_power_on(struct omap_dss_device *dssdev)
 		msleep(100);
 		s6e8aa0_config(dssdev);
 
-		dsi_video_mode_enable(dssdev, 0x3E); /* DSI_DT_PXLSTREAM_24BPP_PACKED; */
+		//dsi_video_mode_enable(dssdev, 0x3E); /* DSI_DT_PXLSTREAM_24BPP_PACKED; */
+
+		ret = dsi_enable_video_output(dssdev, 0);
+		if (ret)
+			goto err;
 
 		s6->enabled = 1;
 	}
@@ -441,6 +439,8 @@ err:
 static void s6e8aa0_power_off(struct omap_dss_device *dssdev)
 {
 	struct s6e8aa0_data *s6 = dev_get_drvdata(&dssdev->dev);
+
+	dsi_disable_video_output(dssdev, 0);
 
 	gpio_set_value(s6->pdata->reset_gpio, 0);
 	msleep(10);
@@ -471,7 +471,7 @@ static int s6e8aa0_start(struct omap_dss_device *dssdev)
 		dssdev->state = OMAP_DSS_DISPLAY_DISABLED;
 	} else {
 		dssdev->state = OMAP_DSS_DISPLAY_ACTIVE;
-		dssdev->manager->enable(dssdev->manager);
+		//dssdev->manager->enable(dssdev->manager);
 	}
 
 	mutex_unlock(&s6->lock);
@@ -485,7 +485,7 @@ static void s6e8aa0_stop(struct omap_dss_device *dssdev)
 
 	mutex_lock(&s6->lock);
 
-	dssdev->manager->disable(dssdev->manager);
+	//dssdev->manager->disable(dssdev->manager);
 
 	dsi_bus_lock(dssdev);
 
@@ -539,12 +539,11 @@ static int s6e8aa0_update(struct omap_dss_device *dssdev,
 		goto err;
 	}
 
-	r = omap_dsi_prepare_update(dssdev, &x, &y, &w, &h, true);
-	if (r)
-		goto err;
-
 	/* We use VC(0) for VideoPort Data and VC(1) for commands */
-	r = omap_dsi_update(dssdev, 0, x, y, w, h, s6e8aa0_framedone_cb, dssdev);
+	//r = omap_dsi_update(dssdev, 0, x, y, w, h, s6e8aa0_framedone_cb, dssdev);
+
+	r = omap_dsi_update(dssdev, 0, s6e8aa0_framedone_cb,
+				dssdev);
 	if (r)
 		goto err;
 
@@ -562,33 +561,6 @@ static int s6e8aa0_sync(struct omap_dss_device *dssdev)
 {
 	/* TODO? */
 	return 0;
-}
-
-static int s6e8aa0_set_update_mode(struct omap_dss_device *dssdev,
-			       enum omap_dss_update_mode mode)
-{
-	struct s6e8aa0_data *s6 = dev_get_drvdata(&dssdev->dev);
-
-	if (s6->force_update) {
-		if (mode != OMAP_DSS_UPDATE_AUTO)
-			return -EINVAL;
-	} else {
-		if (mode != OMAP_DSS_UPDATE_MANUAL)
-			return -EINVAL;
-	}
-
-	return 0;
-}
-
-static enum omap_dss_update_mode s6e8aa0_get_update_mode(struct omap_dss_device
-						     *dssdev)
-{
-	struct s6e8aa0_data *s6 = dev_get_drvdata(&dssdev->dev);
-
-	if (s6->force_update)
-		return OMAP_DSS_UPDATE_AUTO;
-	else
-		return OMAP_DSS_UPDATE_MANUAL;
 }
 
 #ifdef CONFIG_PM
@@ -627,9 +599,6 @@ static struct omap_dss_driver s6e8aa0_driver = {
 	.suspend = s6e8aa0_suspend,
 	.resume = s6e8aa0_resume,
 #endif
-
-	.set_update_mode = s6e8aa0_set_update_mode,
-	.get_update_mode = s6e8aa0_get_update_mode,
 
 	.update = s6e8aa0_update,
 	.sync = s6e8aa0_sync,

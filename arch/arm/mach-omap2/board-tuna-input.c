@@ -184,7 +184,6 @@ static struct i2c_board_info __initdata tuna_i2c3_boardinfo_pre_lunchbox[] = {
 	{
 		I2C_BOARD_INFO("atmel_mxt_ts", 0x4a),
 		.platform_data = &atmel_mxt_ts_pdata,
-		.irq = OMAP_GPIO_IRQ(GPIO_TOUCH_IRQ),
 	},
 };
 
@@ -238,7 +237,6 @@ static struct i2c_board_info __initdata tuna_i2c3_boardinfo_final[] = {
 		I2C_BOARD_INFO("mms_ts", 0x48),
 		.flags = I2C_CLIENT_WAKE,
 		.platform_data = &mms_ts_pdata,
-		.irq = OMAP_GPIO_IRQ(GPIO_TOUCH_IRQ),
 	},
 };
 
@@ -255,11 +253,16 @@ void __init omap4_tuna_input_init(void)
 		gpio_request(GPIO_TOUCH_SCL, "ap_i2c3_scl");
 		gpio_request(GPIO_TOUCH_SDA, "ap_i2c3_sda");
 
+		tuna_i2c3_boardinfo_final[0].irq = gpio_to_irq(GPIO_TOUCH_IRQ);
+
 		i2c_register_board_info(3, tuna_i2c3_boardinfo_final,
 			ARRAY_SIZE(tuna_i2c3_boardinfo_final));
 	}
 
 	if (omap4_tuna_get_revision() == TUNA_REV_PRE_LUNCHBOX) {
+
+		tuna_i2c3_boardinfo_pre_lunchbox[0].irq = gpio_to_irq(GPIO_TOUCH_IRQ);
+
 		i2c_register_board_info(3, tuna_i2c3_boardinfo_pre_lunchbox,
 			ARRAY_SIZE(tuna_i2c3_boardinfo_pre_lunchbox));
 

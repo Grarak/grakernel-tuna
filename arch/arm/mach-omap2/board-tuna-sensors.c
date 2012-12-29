@@ -31,7 +31,6 @@ static struct mpu_platform_data mpu_data = {
 			  0,  0,  1 },
 	/* accel */
 	.accel = {
-		.irq = OMAP_GPIO_IRQ(GPIO_ACC_INT),
 		.adapt_num   = 4,
 		.bus         = EXT_SLAVE_BUS_SECONDARY,
 		.address     = 0x18,
@@ -41,7 +40,6 @@ static struct mpu_platform_data mpu_data = {
 	},
 	/* compass */
 	.compass = {
-		.irq = OMAP_GPIO_IRQ(GPIO_MAG_INT),
 		.adapt_num   = 4,
 		.bus         = EXT_SLAVE_BUS_PRIMARY,
 		.address     = 0x2E,
@@ -52,19 +50,16 @@ static struct mpu_platform_data mpu_data = {
 };
 
 static struct i2c_board_info __initdata tuna_sensors_i2c4_boardinfo[] = {
-	{
+	[0] = {
 		I2C_BOARD_INFO("mpu3050", 0x68),
-		.irq = OMAP_GPIO_IRQ(GPIO_GYRO_INT),
 		.platform_data = &mpu_data,
 	},
-	{
+	[1] = {
 		I2C_BOARD_INFO("bma250", 0x18),
-		.irq = OMAP_GPIO_IRQ(GPIO_ACC_INT),
 		.platform_data = &mpu_data.accel,
 	},
-	{
+	[2] = {
 		I2C_BOARD_INFO("yas530", 0x2e),
-		.irq = OMAP_GPIO_IRQ(GPIO_MAG_INT),
 		.platform_data = &mpu_data.compass,
 	},
 };
@@ -82,6 +77,10 @@ void __init omap4_tuna_sensors_init(void)
 	gpio_direction_input(GPIO_ACC_INT);
 	gpio_request(GPIO_MAG_INT, "MAG_INT");
 	gpio_direction_input(GPIO_MAG_INT);
+
+	tuna_sensors_i2c4_boardinfo[0].irq = gpio_to_irq(GPIO_GYRO_INT);
+	tuna_sensors_i2c4_boardinfo[1].irq = gpio_to_irq(GPIO_ACC_INT);
+	tuna_sensors_i2c4_boardinfo[2].irq = gpio_to_irq(GPIO_MAG_INT);
 
 	i2c_register_board_info(4, tuna_sensors_i2c4_boardinfo,
 				ARRAY_SIZE(tuna_sensors_i2c4_boardinfo));
