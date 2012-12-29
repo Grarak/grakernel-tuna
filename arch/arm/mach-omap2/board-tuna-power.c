@@ -112,10 +112,10 @@ void __init omap4_tuna_power_init(void)
 
 	if (omap4_tuna_final_gpios()) {
 		/* Vsel0 = gpio, vsel1 = gnd */
-		status = omap_tps6236x_board_setup(true, TPS62361_GPIO, -1,
-					OMAP_PIN_OFF_OUTPUT_HIGH, -1);
-		if (status)
-			pr_err("TPS62361 initialization failed: %d\n", status);
+		//status = omap_tps6236x_board_setup(true, TPS62361_GPIO, -1,
+		//			OMAP_PIN_OFF_OUTPUT_HIGH, -1);
+		//if (status)
+		//	pr_err("TPS62361 initialization failed: %d\n", status);
 	}
 
 	if (omap4_tuna_get_revision() == TUNA_REV_PRE_LUNCHBOX) {

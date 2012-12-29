@@ -3546,11 +3546,12 @@ dhd_preinit_ioctls(dhd_pub_t *dhd)
 				iovbuf, sizeof(iovbuf), TRUE, 0)) < 0) {
 				DHD_ERROR(("%s APSTA for P2P failed ret= %d\n", __FUNCTION__, ret));
 			}
-
+#if 0
 			memcpy(&p2p_ea, &dhd->mac, ETHER_ADDR_LEN);
 			ETHER_SET_LOCALADDR(&p2p_ea);
 			bcm_mkiovar("p2p_da_override", (char *)&p2p_ea,
 				ETHER_ADDR_LEN, iovbuf, sizeof(iovbuf));
+#endif
 			if ((ret = dhd_wl_ioctl_cmd(dhd, WLC_SET_VAR,
 				iovbuf, sizeof(iovbuf), TRUE, 0)) < 0) {
 				DHD_ERROR(("%s p2p_da_override ret= %d\n", __FUNCTION__, ret));
@@ -3965,7 +3966,7 @@ static int dhd_device_event(struct notifier_block *this,
 	if ((ifa->ifa_dev->dev->netdev_ops != &dhd_ops_pri) &&
 	    (ifa->ifa_dev->dev->netdev_ops != &dhd_ops_virt)) {
 #ifdef WLP2P
-		if (!wl_cfgp2p_is_ifops(ifa->ifa_dev->dev->netdev_ops))
+		//if (!wl_cfgp2p_is_ifops(ifa->ifa_dev->dev->netdev_ops))
 #endif
 			return NOTIFY_DONE;
 	}

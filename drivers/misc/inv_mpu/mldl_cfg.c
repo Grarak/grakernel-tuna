@@ -339,13 +339,14 @@ static int inv_get_silicon_rev_mpu3050(
 		LOG_RESULT_LOCATION(result);
 		return result;
 	}
-
+#if 0
 	if (index < OLDEST_PROD_REV_SUPPORTED || index >= NUM_OF_PROD_REVS) {
 		mldl_cfg->silicon_revision = 0;
 		mldl_cfg->gyro_sens_trim = 0;
 		MPL_LOGE("Unsupported Product Revision Detected : %d\n", index);
 		return INV_ERROR_INVALID_MODULE;
 	}
+#endif
 
 	mldl_cfg->product_revision = index;
 	mldl_cfg->silicon_revision = prod_rev_map[index].silicon_rev;
@@ -1086,12 +1087,14 @@ static int gyro_resume(struct mldl_cfg *mldl_cfg, void *gyro_handle,
 		return result;
 	}
 	regs[0] = MPUREG_X_OFFS_USRH;
+#if 0
 	for (ii = 0; ii < ARRAY_SIZE(mldl_cfg->offset); ii++) {
 		regs[1 + ii * 2] = (unsigned char)(mldl_cfg->offset[ii] >> 8)
 		    & 0xff;
 		regs[1 + ii * 2 + 1] =
 		    (unsigned char)(mldl_cfg->offset[ii] & 0xff);
 	}
+#endif
 	result = inv_serial_write(gyro_handle, mldl_cfg->addr, 7, regs);
 	if (result) {
 		LOG_RESULT_LOCATION(result);

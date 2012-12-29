@@ -53,6 +53,10 @@ static struct platform_device omap_fb_device = {
 	.num_resources = 0,
 };
 
+void omapfb_set_platform_data(struct omapfb_platform_data *data)
+{
+}
+
 void __init omapfb_set_lcd_config(const struct omap_lcd_config *config)
 {
 	omapfb_config.lcd = *config;

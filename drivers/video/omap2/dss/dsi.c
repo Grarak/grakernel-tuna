@@ -3956,6 +3956,42 @@ static int dsi_proto_config(struct omap_dss_device *dssdev)
 	return 0;
 }
 
+int dsi_video_mode_enable(struct omap_dss_device *dssdev, u8 data_type)
+{
+	struct platform_device *dsidev = dsi_get_dsidev_from_dssdev(dssdev);
+	u16 word_count;
+	u32 r;
+	u32 header;
+
+	dsi_if_enable(dsidev, 0);
+	dsi_vc_enable(dsidev, 1, 0);
+	dsi_vc_enable(dsidev, 0, 0);
+
+	r = dsi_read_reg(dsidev, DSI_TIMING1);
+	r = FLD_MOD(r, 1, 15, 15);	/* FORCE_TX_STOP_MODE_IO */
+	dsi_write_reg(dsidev, DSI_TIMING1, r);
+
+	if (wait_for_bit_change(dsidev, DSI_PLL_STATUS, 15, 0) != 0)
+		BUG();
+
+	r = dsi_read_reg(dsidev, DSI_VC_CTRL(0));
+	r = FLD_MOD(r, 1, 4, 4);
+	r = FLD_MOD(r, 1, 9, 9);
+	dsi_write_reg(dsidev, DSI_VC_CTRL(0), r);
+
+	word_count = dssdev->panel.timings.x_res * 3;
+	header = FLD_VAL(0, 31, 24) | /* ECC */
+		FLD_VAL(word_count, 23, 8) | /* WORD_COUNT */
+		FLD_VAL(0, 7, 6) | /* VC_ID */
+		FLD_VAL(data_type, 5, 0);
+	dsi_write_reg(dsidev, DSI_VC_LONG_PACKET_HEADER(0), header);
+
+	dsi_vc_enable(dsidev, 0, 1);
+	dsi_if_enable(dsidev, 1);
+
+	return 0;
+}
+
 static void dsi_proto_timings(struct omap_dss_device *dssdev)
 {
 	struct platform_device *dsidev = dsi_get_dsidev_from_dssdev(dssdev);
@@ -4442,6 +4478,44 @@ static void dsi_framedone_irq_callback(void *data, u32 mask)
 	dispc_fake_vsync_irq();
 #endif
 }
+
+int omap_dsi_prepare_update(struct omap_dss_device *dssdev,
+				    u16 *x, u16 *y, u16 *w, u16 *h,
+				    bool enlarge_update_area)
+{
+	struct platform_device *dsidev = dsi_get_dsidev_from_dssdev(dssdev);
+	u16 dw, dh;
+
+	dssdev->driver->get_resolution(dssdev, &dw, &dh);
+
+	if  (*x > dw || *y > dh)
+		return -EINVAL;
+
+	if (*x + *w > dw)
+		return -EINVAL;
+
+	if (*y + *h > dh)
+		return -EINVAL;
+
+	if (*w == 1)
+		return -EINVAL;
+
+	if (*w == 0 || *h == 0)
+		return -EINVAL;
+
+	dsi_perf_mark_setup(dsidev);
+
+#if 0
+	if (dssdev->manager->caps & OMAP_DSS_OVL_MGR_CAP_DISPC) {
+		dss_setup_partial_planes(dssdev, x, y, w, h,
+				enlarge_update_area);
+		dispc_set_lcd_size(dssdev->manager->id, *w, *h);
+	}
+#endif
+
+	return 0;
+}
+EXPORT_SYMBOL(omap_dsi_prepare_update);
 
 int omap_dsi_update(struct omap_dss_device *dssdev, int channel,
 		void (*callback)(int, void *), void *data)

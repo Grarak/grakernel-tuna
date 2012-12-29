@@ -140,6 +140,12 @@ enum omap_panel_config {
 	OMAP_DSS_LCD_TFT		= 1<<20,
 };
 
+enum omap_dss_dsi_type {
+	OMAP_DSS_DSI_TYPE_CMD_MODE = 0,
+	OMAP_DSS_DSI_TYPE_VIDEO_MODE,
+};
+
+
 enum omap_dss_venc_type {
 	OMAP_DSS_VENC_TYPE_COMPOSITE,
 	OMAP_DSS_VENC_TYPE_SVIDEO,
@@ -160,6 +166,12 @@ enum omap_dss_dsi_mode {
 enum omap_display_caps {
 	OMAP_DSS_DISPLAY_CAP_MANUAL_UPDATE	= 1 << 0,
 	OMAP_DSS_DISPLAY_CAP_TEAR_ELIM		= 1 << 1,
+};
+
+enum omap_dss_update_mode {
+	OMAP_DSS_UPDATE_DISABLED = 0,
+	OMAP_DSS_UPDATE_AUTO,
+	OMAP_DSS_UPDATE_MANUAL,
 };
 
 enum omap_dss_display_state {
@@ -199,6 +211,7 @@ enum omap_overlay_caps {
 
 enum omap_overlay_manager_caps {
 	OMAP_DSS_DUMMY_VALUE, /* add a dummy value to prevent compiler error */
+	OMAP_DSS_OVL_MGR_CAP_DISPC = 1 << 0,
 };
 
 enum omap_dss_clk_source {
@@ -291,6 +304,11 @@ void omap_rfbi_write_pixels(const void __iomem *buf, int scr_width,
 		u16 x, u16 y,
 		u16 w, u16 h);
 int omap_rfbi_enable_te(bool enable, unsigned line);
+
+int omap_dsi_prepare_update(struct omap_dss_device *dssdev,
+				    u16 *x, u16 *y, u16 *w, u16 *h,
+				    bool enlarge_update_area);
+
 int omap_rfbi_setup_te(enum omap_rfbi_te_mode mode,
 			     unsigned hs_pulse_time, unsigned vs_pulse_time,
 			     int hs_pol_inv, int vs_pol_inv, int extif_div);
@@ -359,6 +377,8 @@ int dsi_vc_send_null(struct omap_dss_device *dssdev, int channel);
 int dsi_vc_send_bta_sync(struct omap_dss_device *dssdev, int channel);
 int dsi_enable_video_output(struct omap_dss_device *dssdev, int channel);
 void dsi_disable_video_output(struct omap_dss_device *dssdev, int channel);
+
+int dsi_video_mode_enable(struct omap_dss_device *dssdev, u8 data_type);
 
 /* Board specific data */
 struct omap_dss_board_info {
@@ -657,6 +677,9 @@ struct omap_overlay_manager {
 	int (*set_ovl)(struct omap_overlay_manager *mgr);
 	int (*wb_apply)(struct omap_overlay_manager *mgr,
 		struct omap_writeback *wb);
+
+	int (*enable)(struct omap_overlay_manager *mgr);
+	int (*disable)(struct omap_overlay_manager *mgr);
 };
 
 struct omap_dss_device {
@@ -685,6 +708,7 @@ struct omap_dss_device {
 		} sdi;
 
 		struct {
+			enum omap_dss_dsi_type type;
 			u8 clk_lane;
 			u8 clk_pol;
 			u8 data1_lane;
@@ -816,6 +840,11 @@ struct omap_dss_driver {
 	int (*resume)(struct omap_dss_device *display);
 	int (*run_test)(struct omap_dss_device *display, int test);
 
+	int (*set_update_mode)(struct omap_dss_device *dssdev,
+			enum omap_dss_update_mode);
+	enum omap_dss_update_mode (*get_update_mode)(
+			struct omap_dss_device *dssdev);
+
 	int (*update)(struct omap_dss_device *dssdev,
 			       u16 x, u16 y, u16 w, u16 h);
 	int (*sync)(struct omap_dss_device *dssdev);
@@ -924,9 +953,6 @@ void omapdss_display_get_dimensions(struct omap_dss_device *dssdev,
 void omapdss_dsi_vc_enable_hs(struct omap_dss_device *dssdev, int channel,
 		bool enable);
 int omapdss_dsi_enable_te(struct omap_dss_device *dssdev, bool enable);
-
-int omap_dsi_update(struct omap_dss_device *dssdev, int channel,
-		void (*callback)(int, void *), void *data);
 int omap_dsi_request_vc(struct omap_dss_device *dssdev, int *channel);
 int omap_dsi_set_vc_id(struct omap_dss_device *dssdev, int channel, int vc_id);
 void omap_dsi_release_vc(struct omap_dss_device *dssdev, int channel);

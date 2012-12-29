@@ -544,9 +544,9 @@ static int s6e8aa0_update(struct omap_dss_device *dssdev,
 		goto err;
 
 	/* We use VC(0) for VideoPort Data and VC(1) for commands */
-	r = omap_dsi_update(dssdev, 0, x, y, w, h, s6e8aa0_framedone_cb, dssdev);
-	if (r)
-		goto err;
+	//r = omap_dsi_update(dssdev, 0, x, y, w, h, s6e8aa0_framedone_cb, dssdev);
+	//if (r)
+	//	goto err;
 
 	dsi_bus_unlock(dssdev);
 	/* note: no bus_unlock here. unlock is in framedone_cb */
