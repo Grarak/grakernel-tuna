@@ -79,6 +79,9 @@ static struct omap_dss_device tuna_oled_device = {
 	.driver_name		= "s6e8aa0",
 	.type			= OMAP_DISPLAY_TYPE_DSI,
 	.data			= &tuna_oled_data,
+	.panel			= {
+		.dsi_mode	= OMAP_DSS_DSI_VIDEO_MODE,
+	},
 	.phy.dsi		= {
 		.clk_lane	= 1,
 		.clk_pol	= 0,
