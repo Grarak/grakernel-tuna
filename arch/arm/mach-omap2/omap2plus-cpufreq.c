@@ -682,6 +682,63 @@ static struct freq_attr omap_UV_mV_table = {
 };
 #endif
 
+static ssize_t show_screen_on_freq(struct cpufreq_policy *policy, char *buf)
+{
+	return sprintf(buf, "%u\n", screen_on_min_freq);
+}
+
+static ssize_t store_screen_on_freq(struct cpufreq_policy *policy,
+	const char *buf, size_t count)
+{
+	unsigned int freq = 0;
+	int ret;
+	int index;
+
+	if (!freq_table)
+		return -EINVAL;
+
+	ret = sscanf(buf, "%u", &freq);
+	if (ret != 1)
+		return -EINVAL;
+
+	mutex_lock(&omap_cpufreq_lock);	
+
+	ret = cpufreq_frequency_table_target(policy, freq_table, freq,
+		CPUFREQ_RELATION_H, &index);
+	if (ret)
+		goto out;
+
+	screen_on_min_freq = freq_table[index].frequency;
+
+	ret = count;
+
+	min_capped = screen_on_min_freq;
+
+out:
+	mutex_unlock(&omap_cpufreq_lock);
+	return ret;
+}
+
+struct freq_attr omap_cpufreq_attr_screen_on_freq = {
+	.attr = { .name = "screen_on_min_freq",
+		  .mode = 0644,
+		},
+	.show = show_screen_on_freq,
+	.store = store_screen_on_freq,
+};
+
+static ssize_t show_gpu_clock(struct cpufreq_policy *policy, char *buf) {
+	struct clk *clk = clk_get(NULL, "dpll_per_m7x2_ck");	
+	return sprintf(buf, "%lu Mhz\n", clk->rate/1000000);
+}
+
+static struct freq_attr gpu_clock = {
+    .attr = {.name = "gpu_clock",
+	     .mode=0644,
+    },
+    .show = show_gpu_clock,
+};
+
 static struct freq_attr *omap_cpufreq_attr[] = {
 	&cpufreq_freq_attr_scaling_available_freqs,
 	&omap_cpufreq_attr_screen_off_freq,
@@ -689,6 +746,7 @@ static struct freq_attr *omap_cpufreq_attr[] = {
 	&omap_UV_mV_table,
 #endif
 	&gpu_oc,
+	&gpu_clock,
 	NULL,
 };
 
