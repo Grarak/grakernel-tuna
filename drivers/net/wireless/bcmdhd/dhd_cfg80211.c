@@ -209,6 +209,30 @@ dev_wlc_bufvar_set(struct net_device *dev, char *name, char *buf, int len)
 
 	return (wldev_ioctl(dev, WLC_SET_VAR, ioctlbuf_local, sizeof(ioctlbuf_local), true));
 }
+
+static int
+dev_wlc_bufvar_get(
+	struct net_device *dev,
+	char *name,
+	char *buf, int buflen)
+{
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 31)
+	char ioctlbuf_local[1024];
+#else
+	static char ioctlbuf_local[1024];
+#endif
+	int error;
+	uint len;
+
+	len = bcm_mkiovar(name, buf, buflen, ioctlbuf_local, sizeof(ioctlbuf_local));
+	ASSERT(len);
+	error = wldev_ioctl(dev, WLC_GET_VAR, (void *)ioctlbuf_local, sizeof(ioctlbuf_local), false);
+	if (!error)
+		bcopy(ioctlbuf_local, buf, buflen);
+
+	return (error);
+}
+
 /*
 get named driver variable to uint register value and return error indication
 calling example: dev_wlc_intvar_set_reg(dev, "btc_params",66, value)
@@ -365,6 +389,37 @@ static int set_btc_esco_params(struct net_device *dev, bool trump_sco)
 	return 0;
 }
 #endif /* BT_DHCP_eSCO_FIX */
+
+/*
+ * btc_flags[2] is to turn CTS-to-self on/off
+ */
+s32
+wl_cfg80211_set_btc_cts(struct net_device *dev, bool flag)
+{
+	char buf[8];
+
+	memset(buf, 0, sizeof(buf));
+	buf[0] = 2;
+	buf[4] = flag;
+	dev_wlc_bufvar_set(dev, "btc_flags", (char *)buf, sizeof(buf));
+	return 0;
+}
+
+s32
+wl_cfg80211_get_btc_cts(struct net_device *dev, char *command, int len)
+{
+	int bytes_written;
+	char buf[8];
+	int error;
+
+	memset(buf, 0, sizeof(buf));
+	buf[0] = 2;
+	error = dev_wlc_bufvar_get(dev, "btc_flags", buf, sizeof(buf));
+	if (error)
+		return -1;
+	bytes_written = snprintf(command, len, "CTS mode %d", buf[0]);
+	return bytes_written;
+}
 
 static void
 wl_cfg80211_bt_setflag(struct net_device *dev, bool set)

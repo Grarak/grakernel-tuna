@@ -847,4 +847,6 @@ extern int wl_cfg80211_scan_suppress(struct net_device *dev, int suppress);
 extern void wl_cfg80211_add_to_eventbuffer(wl_eventmsg_buf_t *ev, u16 event, bool set);
 extern s32 wl_cfg80211_apply_eventbuffer(struct net_device *ndev,
 	struct wl_priv *wl, wl_eventmsg_buf_t *ev);
+extern s32 wl_cfg80211_set_btc_cts(struct net_device *, bool);
+extern s32 wl_cfg80211_get_btc_cts(struct net_device *, char *, int);
 #endif				/* _wl_cfg80211_h_ */

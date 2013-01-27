@@ -79,7 +79,8 @@
 #endif
 #define CMD_P2P_SET_PS		"P2P_SET_PS"
 #define CMD_SET_AP_WPS_P2P_IE 		"SET_AP_WPS_P2P_IE"
-
+#define CMD_SET_BTC_CTS_MODE    "SET_BTC_CTS_MODE"
+#define CMD_GET_BTC_CTS_MODE    "GET_BTC_CTS_MODE"
 
 #ifdef PNO_SUPPORT
 #define CMD_PNOSSIDCLR_SET	"PNOSSIDCLR"
@@ -631,6 +632,14 @@ int wl_android_priv_cmd(struct net_device *net, struct ifreq *ifr, int cmd)
 			priv_cmd.total_len - skip, *(command + skip - 2) - '0');
 	}
 #endif /* WL_CFG80211 */
+	else if (strnicmp(command, CMD_SET_BTC_CTS_MODE, strlen(CMD_SET_BTC_CTS_MODE)) == 0) {
+		bool flag = *(command + strlen(CMD_SET_BTC_CTS_MODE) + 1) - '0';
+		wl_cfg80211_set_btc_cts(net, flag);
+		bytes_written = snprintf(command, priv_cmd.total_len, "CTS mode to %d", flag);
+	}
+	else if (strnicmp(command, CMD_GET_BTC_CTS_MODE, strlen(CMD_GET_BTC_CTS_MODE)) == 0) {
+		bytes_written = wl_cfg80211_get_btc_cts(net, command, priv_cmd.total_len);
+	}
 	else {
 		DHD_ERROR(("Unknown PRIVATE command %s - ignored\n", command));
 		snprintf(command, 3, "OK");
