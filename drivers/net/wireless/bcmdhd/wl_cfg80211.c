@@ -3198,6 +3198,10 @@ wl_cfg80211_set_power_mgmt(struct wiphy *wiphy, struct net_device *dev,
 	s32 err = 0;
 	struct wl_priv *wl = wiphy_priv(wiphy);
 
+#if !defined(SUPPORT_PM2_ONLY)
+	dhd_pub_t *dhd =  (dhd_pub_t *)(wl->pub);
+#endif
+
 	CHECK_SYS_UP(wl);
 
 	if (wl->p2p_net == dev) {
@@ -3210,6 +3214,13 @@ wl_cfg80211_set_power_mgmt(struct wiphy *wiphy, struct net_device *dev,
 		WL_DBG(("Do not enable the power save for p2p interfaces even after assoc\n"));
 		pm = PM_OFF;
 	}
+
+#if !defined(SUPPORT_PM2_ONLY)
+	pm = enabled ? ((dhd->in_suspend) ? PM_MAX : PM_FAST) : PM_OFF;
+#else
+	pm = enabled ? PM_FAST : PM_OFF;
+#endif
+
 	pm = htod32(pm);
 	WL_DBG(("power save %s\n", (pm ? "enabled" : "disabled")));
 	err = wldev_ioctl(dev, WLC_SET_PM, &pm, sizeof(pm), true);
