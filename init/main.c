@@ -70,6 +70,7 @@
 #include <linux/perf_event.h>
 #include <linux/random.h>
 #include <linux/boottime.h>
+#include <linux/fs.h>
 
 #include <asm/io.h>
 #include <asm/bugs.h>
@@ -623,6 +624,8 @@ asmlinkage void __init start_kernel(void)
 	sfi_init_late();
 
 	ftrace_init();
+
+	suspend_fstrim_init();
 
 	/* Do the rest non-__init'ed, we're now alive */
 	rest_init();

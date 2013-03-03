@@ -2514,6 +2514,9 @@ static inline ino_t parent_ino(struct dentry *dentry)
 	return res;
 }
 
+/* fs/suspend_fstrim.c */
+void suspend_fstrim_init(void);
+
 /* Transaction based IO helpers */
 
 /*
