@@ -71,7 +71,7 @@ void *sradix_tree_next(struct sradix_tree_root *root,
 		       int (*iter)(void *item, unsigned long height))
 {
 	unsigned long offset;
-	void *item;
+	void *item = 0;
 
 	if (unlikely(node == NULL)) {
 		node = root->rnode;

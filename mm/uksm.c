@@ -166,7 +166,7 @@ static int is_full_zero(const void *s1, size_t len)
 #else
 static int is_full_zero(const void *s1, size_t len)
 {
-	unsigned long *src = s1;
+	const unsigned long *src = s1;
 	int i;
 
 	len /= sizeof(*src);
@@ -194,14 +194,14 @@ struct slot_tree_node {
 
 static struct kmem_cache *slot_tree_node_cachep;
 
-static struct sradix_tree_node *slot_tree_node_alloc(void) 
+static struct sradix_tree_node *slot_tree_node_alloc(void)
 {
 	struct slot_tree_node *p;
 	p = kmem_cache_zalloc(slot_tree_node_cachep, GFP_KERNEL);
 	if (!p)
 		return NULL;
 
-	return &p->snode; 
+	return &p->snode;
 }
 
 static void slot_tree_node_free(struct sradix_tree_node *node)
@@ -223,7 +223,7 @@ static void slot_tree_node_extend(struct sradix_tree_node *parent,
 	p->size += c->size;
 }
 
-void slot_tree_node_assign(struct sradix_tree_node *node, 
+void slot_tree_node_assign(struct sradix_tree_node *node,
 			   unsigned index, void *item)
 {
 	struct vma_slot *slot = item;
@@ -271,7 +271,7 @@ int slot_iter(void *item,  unsigned long height)
 		slot = item;
 		if (slot_iter_index < slot->pages) {
 			/*in this one*/
-			return 1; 
+			return 1;
 		} else {
 			slot_iter_index -= slot->pages;
 			return 0;
@@ -281,7 +281,7 @@ int slot_iter(void *item,  unsigned long height)
 		node = container_of(item, struct slot_tree_node, snode);
 		if (slot_iter_index < node->size) {
 			/*in this one*/
-			return 1; 
+			return 1;
 		} else {
 			slot_iter_index -= node->size;
 			return 0;
@@ -303,7 +303,7 @@ static inline void slot_tree_init_root(struct sradix_tree_root *root)
 void slot_tree_init(void)
 {
 	slot_tree_node_cachep = kmem_cache_create("slot_tree_node",
-				sizeof(struct slot_tree_node), 0, 
+				sizeof(struct slot_tree_node), 0,
 				SLAB_PANIC | SLAB_RECLAIM_ACCOUNT,
 				NULL);
 }
@@ -2517,7 +2517,7 @@ static void stable_tree_append(struct rmap_item *rmap_item,
 		if (logdedup) {
 			node_vma->slot->pages_bemerged += factor;
 			if (list_empty(&node_vma->slot->dedup_list))
-				list_add(&node_vma->slot->dedup_list, 
+				list_add(&node_vma->slot->dedup_list,
 					 &vma_slot_dedup);
 		}
 	}
@@ -2562,7 +2562,7 @@ node_vma_ok: /* ok, ready to add to the list */
 						      cont_p, hlist) {
 				node_vma->slot->pages_bemerged += factor;
 				if (list_empty(&node_vma->slot->dedup_list))
-					list_add(&node_vma->slot->dedup_list, 
+					list_add(&node_vma->slot->dedup_list,
 						 &vma_slot_dedup);
 			}
 		}
@@ -2892,6 +2892,7 @@ struct rmap_list_entry *get_rmap_list_entry(struct vma_slot *slot,
 					    unsigned long index, int need_alloc)
 {
 	unsigned long pool_index;
+	struct page *page;
 	void *addr;
 
 
@@ -2900,9 +2901,11 @@ struct rmap_list_entry *get_rmap_list_entry(struct vma_slot *slot,
 		if (!need_alloc)
 			return NULL;
 
-		slot->rmap_list_pool[pool_index] =
-			alloc_page(GFP_KERNEL | __GFP_ZERO);
-		BUG_ON(!slot->rmap_list_pool[pool_index]);
+		page = alloc_page(GFP_KERNEL | __GFP_ZERO | __GFP_NOWARN);
+		if (!page)
+			return NULL;
+
+		slot->rmap_list_pool[pool_index] = page;
 	}
 
 	addr = kmap(slot->rmap_list_pool[pool_index]);
@@ -3183,6 +3186,9 @@ static struct rmap_item *get_next_rmap_item(struct vma_slot *slot, u32 *hash)
 	}
 
 	scan_entry = get_rmap_list_entry(slot, scan_index, 1);
+	if (!scan_entry)
+		return NULL;
+
 	if (entry_is_new(scan_entry)) {
 		scan_entry->addr = get_index_orig_addr(slot, scan_index);
 		set_is_addr(scan_entry->addr);
@@ -3223,7 +3229,7 @@ static struct rmap_item *get_next_rmap_item(struct vma_slot *slot, u32 *hash)
 	flush_anon_page(slot->vma, page, addr);
 	flush_dcache_page(page);
 
-	
+
 	*hash = page_hash(page, hash_strength, 1);
 	inc_uksm_pages_scanned();
 	/*if the page content all zero, re-map to zero-page*/
@@ -3363,11 +3369,11 @@ static inline int step_need_recalc(struct scan_rung *rung)
 	pages = rung_get_pages(rung);
 	stepmax = pages / RUNG_SAMPLED_MIN;
 
-	return pages && (rung->step > pages || 
+	return pages && (rung->step > pages ||
 			 (stepmax && rung->step > stepmax));
 }
 
-static inline 
+static inline
 void reset_current_scan(struct scan_rung *rung, int finished, int step_recalc)
 {
 	struct vma_slot *slot;
@@ -3441,7 +3447,7 @@ static inline void rung_rm_slot(struct vma_slot *slot)
 		reset_current_scan(slot->rung, 1, 0);
 }
 
-static inline void rung_add_new_slots(struct scan_rung *rung, 
+static inline void rung_add_new_slots(struct scan_rung *rung,
 			struct vma_slot **slots, unsigned long num)
 {
 	int err;
@@ -3462,17 +3468,20 @@ static inline void rung_add_new_slots(struct scan_rung *rung,
 		reset_current_scan(rung, 0, 1);
 }
 
-static inline void rung_add_one_slot(struct scan_rung *rung, 
+static inline int rung_add_one_slot(struct scan_rung *rung,
 				     struct vma_slot *slot)
 {
 	int err;
 
 	err = sradix_tree_enter(&rung->vma_root, (void **)&slot, 1);
-	BUG_ON(err);
-	slot->rung = rung;
+	if (err)
+		return err;
 
-	if (rung->vma_root.num == 1) 
+	slot->rung = rung;
+	if (rung->vma_root.num == 1)
 		reset_current_scan(rung, 0, 1);
+
+	return 0;
 }
 
 /*
@@ -3480,11 +3489,18 @@ static inline void rung_add_one_slot(struct scan_rung *rung,
  */
 static inline int vma_rung_enter(struct vma_slot *slot, struct scan_rung *rung)
 {
-	if (slot->rung == rung)
+	struct scan_rung *old_rung = slot->rung;
+	int err;
+
+	if (old_rung == rung)
 		return 0;
 
 	rung_rm_slot(slot);
-	rung_add_one_slot(rung, slot);
+	err = rung_add_one_slot(rung, slot);
+	if (err) {
+		err = rung_add_one_slot(old_rung, slot);
+		WARN_ON(err); /* OOPS, badly OOM, we lost this slot */
+	}
 
 	return 1;
 }
@@ -3885,9 +3901,9 @@ out:
 
 /**
  * rshash_adjust() - The main function to control the random sampling state
- * machine for hash strength adapting. 
- *  
- * return true if hash_strength has changed. 
+ * machine for hash strength adapting.
+ *
+ * return true if hash_strength has changed.
  */
 static inline int rshash_adjust(void)
 {
@@ -4223,12 +4239,11 @@ static noinline void uksm_calc_scan_pages(void)
 static inline
 unsigned int scan_time_to_sleep(unsigned long long scan_time, unsigned long ratio)
 {
-	scan_time >>= 10; /* to usec level now */
-	BUG_ON(scan_time > ULONG_MAX);
+	scan_time >>= 20; /* to msec level now */
+	BUG_ON(scan_time > (ULONG_MAX / TIME_RATIO_SCALE));
 
-	return (unsigned int) ((unsigned long) scan_time * 
-			       (TIME_RATIO_SCALE - ratio) / USEC_PER_MSEC 
-			       / ratio);
+	return (unsigned int) ((unsigned long) scan_time *
+			       (TIME_RATIO_SCALE - ratio) / ratio);
 }
 
 #define __round_mask(x, y) ((__typeof__(x))((y)-1))
@@ -4256,7 +4271,7 @@ static void uksm_vma_enter(struct vma_slot **slots, unsigned long num)
 		pool_size = vma_pool_size(slot);
 		slot->rmap_list_pool = kzalloc(sizeof(struct page *) *
 					       pool_size, GFP_KERNEL);
-		if (!slot->rmap_list_pool)			
+		if (!slot->rmap_list_pool)
 			break;
 
 		slot->pool_counts = kzalloc(sizeof(unsigned int) * pool_size,
@@ -4305,7 +4320,7 @@ static void uksm_enter_all_slots(void)
 			list_move(&slot->slot_list, &vma_slot_noadd);
 		}
 
-		if (++i == SPIN_LOCK_PERIOD || 
+		if (++i == SPIN_LOCK_PERIOD ||
 		    (index && !(index % SLOT_TREE_NODE_STORE_SIZE))) {
 			spin_unlock(&vma_slot_list_lock);
 
@@ -4375,12 +4390,14 @@ static inline int hash_round_finished(void)
 }
 
 #define UKSM_MMSEM_BATCH	5
+#define BUSY_RETRY		100
+
 /**
  * uksm_do_scan()  - the main worker function.
  */
 static noinline void uksm_do_scan(void)
 {
-	struct vma_slot *slot, *iter;
+	struct vma_slot *slot = 0, *iter = 0;
 	struct mm_struct *busy_mm;
 	unsigned char round_finished, all_rungs_emtpy;
 	int i, err, mmsem_batch;
@@ -4401,6 +4418,7 @@ static noinline void uksm_do_scan(void)
 	for (i = 0; i < SCAN_LADDER_SIZE;) {
 		struct scan_rung *rung = &uksm_scan_ladder[i];
 		unsigned long ratio;
+		int busy_retry;
 
 		if (!rung->pages_to_scan) {
 			i++;
@@ -4417,6 +4435,7 @@ static noinline void uksm_do_scan(void)
 		if (ratio > max_cpu_ratio)
 			max_cpu_ratio = ratio;
 
+		busy_retry = BUSY_RETRY;
 		/*
 		 * Do not consider rung_round_finished() here, just used up the
 		 * rung->pages_to_scan quota.
@@ -4448,9 +4467,11 @@ rm_slot:
 				do {
 					reset = advance_current_scan(rung);
 					iter = rung->current_scan;
-					if (iter->vma->vm_mm != busy_mm)
+					busy_retry--;
+					if (iter->vma->vm_mm != busy_mm ||
+					    !busy_retry || reset)
 						break;
-				} while (!reset);
+				} while (1);
 
 				if (iter->vma->vm_mm != busy_mm) {
 					continue;
@@ -4488,6 +4509,7 @@ rm_slot:
 					up_read(&slot->vma->vm_mm->mmap_sem);
 			}
 
+			busy_retry = BUSY_RETRY;
 			cond_resched();
 		}
 
@@ -4561,12 +4583,12 @@ rm_slot:
 	uksm_calc_scan_pages();
 	uksm_sleep_real = uksm_sleep_jiffies;
 	/* in case of radical cpu bursts, apply the upper bound */
-	if (max_cpu_ratio) {
-		scan_time = task_sched_runtime(current) - start_time;
+	end_time = task_sched_runtime(current);
+	if (max_cpu_ratio && end_time > start_time) {
+		scan_time = end_time - start_time;
 		expected_jiffies = msecs_to_jiffies(
 			scan_time_to_sleep(scan_time, max_cpu_ratio));
 
-		//printk(KERN_ERR "max_cpu_ratio=%lu scan_time=%llu expected_jiffies=%u", max_cpu_ratio, scan_time, expected_jiffies);
 		if (expected_jiffies > uksm_sleep_real)
 			uksm_sleep_real = expected_jiffies;
 
@@ -5598,4 +5620,3 @@ module_init(uksm_init)
 #else
 late_initcall(uksm_init);
 #endif
-
