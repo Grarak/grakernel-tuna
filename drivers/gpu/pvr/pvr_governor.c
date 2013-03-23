@@ -16,6 +16,7 @@
  *
  */
 
+#include <linux/cpufreq.h>
 #include <linux/module.h>
 #include <linux/kobject.h>
 #include <linux/sysfs.h>
@@ -51,19 +52,23 @@ uint PVRSimpleGovernor(bool enabled)
 
 	switch (sgxGovType) {
 		case 1:
-			/* don't count if too busy */
-			if (sgxBusyCount < 20)
-				sgxBusyCount++;
+			if (oc_val != 0) {
+				/* don't count if too busy */
+				if (sgxBusyCount < 20)
+					sgxBusyCount++;
 
-			// faux123 debug
-			//pr_info("PVR Busy Count: %u\n", sgxBusyCount);
+				// faux123 debug
+				//pr_info("PVR Busy Count: %u\n", sgxBusyCount);
 
-			if (sgxBusyCount <= SGX_SPEED_THRESHOLD) {
-				index = SGX_SPEED_TURBO;
-				//pr_info("PVR Turbo Activated!\n");
-				sgxGovernorStats[SGX_SPEED_TURBO]++;
-			}
-			else {
+				if (sgxBusyCount <= SGX_SPEED_THRESHOLD) {
+					index = SGX_SPEED_TURBO;
+					//pr_info("PVR Turbo Activated!\n");
+					sgxGovernorStats[SGX_SPEED_TURBO]++;
+				} else {
+					index = SGX_SPEED_NOMINAL;
+					sgxGovernorStats[SGX_SPEED_NOMINAL]++;
+				}
+			} else {
 				index = SGX_SPEED_NOMINAL;
 				sgxGovernorStats[SGX_SPEED_NOMINAL]++;
 			}
@@ -74,8 +79,13 @@ uint PVRSimpleGovernor(bool enabled)
 			break;
 		case 0:
 		default:
-			index = SGX_SPEED_TURBO;
-			sgxGovernorStats[SGX_SPEED_TURBO]++;
+			if (oc_val != 0) {
+				index = SGX_SPEED_TURBO;
+				sgxGovernorStats[SGX_SPEED_TURBO]++;
+			} else {
+				index = SGX_SPEED_NOMINAL;
+				sgxGovernorStats[SGX_SPEED_NOMINAL]++;
+			}
 			break;
 	}
 
