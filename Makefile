@@ -360,6 +360,13 @@ CFLAGS_KERNEL   = -O2 -mtune=cortex-a9 -march=armv7-a -mfpu=neon -ftree-vectoriz
 AFLAGS_KERNEL	= -O2 -mtune=cortex-a9 -march=armv7-a -mfpu=neon -ftree-vectorize
 CFLAGS_GCOV	= -fprofile-arcs -ftest-coverage
 
+#
+# AK LINARO OPT
+#
+CFLAGS_A7       = -pipe -marm -mfloat-abi=softfp -mcpu=cortex-a9
+CFLAGS_GRAPHITE = -funswitch-loops -fpredictive-commoning -fgcse-after-reload \
+		  -ftree-vectorize -floop-interchange -floop-strip-mine -floop-block
+CFLAGS_MODULO   = -fmodulo-sched -fmodulo-sched-allow-regmoves
 
 # Use LINUXINCLUDE when you must reference the include/ directory.
 # Needed to be compatible with the O= option
@@ -375,12 +382,9 @@ KBUILD_CFLAGS   := -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs \
 		   -Werror-implicit-function-declaration \
 		   -Wno-format-security \
 		   -fno-delete-null-pointer-checks \
-		   -pipe -marm -mfloat-abi=softfp \
-		   -mcpu=cortex-a9 \
-		   -fmodulo-sched -fmodulo-sched-allow-regmoves \
-		   -funswitch-loops -fpredictive-commoning -fgcse-after-reload \
-		   -ftree-vectorize -floop-interchange -floop-strip-mine -floop-block \
-		   -mno-unaligned-access
+		   -mno-unaligned-access \
+		   $(CFLAGS_A7) $(CFLAGS_GRAPHITE) $(CFLAGS_MODULO)
+
 KBUILD_AFLAGS_KERNEL :=
 ifdef CCONFIG_CC_OPTIMIZE_O3
  KBUILD_CFLAGS_KERNEL := -O3 -mtune=cortex-a9 -march=armv7-a -mfpu=neon -ftree-vectorize
