@@ -187,13 +187,13 @@ static int wl_android_get_rssi(struct net_device *net, char *command, int total_
 	error = wldev_get_ssid(net, &ssid);
 	if (error)
 		return -1;
-	if ((ssid.SSID_len == 0) || (ssid.SSID_len > DOT11_MAX_SSID_LEN)) {
+	if ((ssid.SSID_len == 0) || (ssid.SSID_len > DOT11_MAX_SSID_LEN) || (ssid.SSID_len > total_len)) {
 		DHD_ERROR(("%s: wldev_get_ssid failed\n", __FUNCTION__));
 	} else {
 		memcpy(command, ssid.SSID, ssid.SSID_len);
 		bytes_written = ssid.SSID_len;
 	}
-	bytes_written += snprintf(&command[bytes_written], total_len, " rssi %d", rssi);
+	bytes_written += snprintf(&command[bytes_written], total_len - bytes_written, " rssi %d", rssi);
 	DHD_INFO(("%s: command result is %s (%d)\n", __FUNCTION__, command, bytes_written));
 	return bytes_written;
 }
