@@ -98,7 +98,7 @@
  * mapping rather than copying
  * for object mapping.
 */
-#if defined(CONFIG_ARM)
+#if defined(CONFIG_ARM) && !defined(MODULE)
 #define USE_PGTABLE_MAPPING
 #endif
 
