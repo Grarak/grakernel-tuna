@@ -894,7 +894,7 @@ static struct s6e8aa0_factory_calibration_info tuna_oled_factory_info_sm2a2 = {
 		.mult = {
 			1350000000U,
                         1350000000U,
-                        2880000000U,
+                        1880000000U,
 		},
 		.rshift = 31,
 	},
