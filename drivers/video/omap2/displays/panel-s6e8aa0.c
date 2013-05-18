@@ -20,6 +20,7 @@
  */
 
 #include <linux/module.h>
+#include <linux/moduleparam.h>
 #include <linux/debugfs.h>
 #include <linux/delay.h>
 #include <linux/err.h>
@@ -37,6 +38,9 @@
 #include <linux/i2c.h>
 #include <linux/uaccess.h>
 
+#ifdef CONFIG_COLOR_CONTROL
+#include <linux/color_control.h>
+#endif
 
 #include <video/omapdss.h>
 
@@ -65,6 +69,12 @@ enum {
 
 #define DRIVER_NAME "s6e8aa0_i2c"
 #define DEVICE_NAME "s6e8aa0_i2c"
+
+static int contrast = -2;
+module_param(contrast, int, 0755);
+EXPORT_SYMBOL(contrast);
+
+
 
 static int s6e8aa0_update(struct omap_dss_device *dssdev,
 		      u16 x, u16 y, u16 w, u16 h);
@@ -191,7 +201,7 @@ struct omap_dss_device * lcd_dev;
 
 struct s6e8aa0_data * s6_data;
 
-int v1_offset[3] = {0, 0, 0};
+int v1_offset[3] = {-2, 0, 3};
 #endif
 
 static int s6e8aa0_write_reg(struct omap_dss_device *dssdev, u8 reg, u8 val)
@@ -341,6 +351,10 @@ static u32 s6e8aa0_table_lookup(u32 b, int c,
 	} else {
 		vl = table[i - 1].v[c];
 		tmp = (u64)vh * (b - bl) + (u64)vl * (bh - b);
+		if ((bh-bl) == 0) {
+		  pr_info("[imoseyon] %s: whoa wtf\n", __func__);
+		  return b;
+		}
 		do_div(tmp, bh - bl);
 		ret = tmp;
 	}
@@ -759,6 +773,7 @@ static void s6e8aa0_setup_gamma_regs(struct s6e8aa0_data *s6, u8 gamma_regs[],
 
 		v[V1] = s6e8aa0_gamma_lookup(s6, brightness, bv->v1, c);
 		offset = s6->gamma_reg_offsets.v[1][c][V1];
+		offset = offset - min(max(contrast, -24), 16);
 		adj_max = min(V1_ADJ_MAX, V1_ADJ_MAX - offset);
 		adj_min = max(0, 0 - offset);
 		adj = v1_to_v1adj(v[V1], v0) - offset;
