@@ -1,0 +1,36 @@
+ui_print("");
+ui_print("");
+ui_print("");
+ui_print("");
+ui_print("------------------------------------------------");
+ui_print("      ButterKernel Weekly 
+buildscriptline
+ by Grarak      ");
+ui_print("              ____        ___  _                ");
+ui_print("             |  _ \ _  _ / _ \| |               ");
+ui_print("             | |_| | || | |_| | |_              ");
+ui_print("             |____/ \__/|_| |_|___/             ");
+ui_print("        _____        _   _   _____              ");
+ui_print("       |  _  \     _| |_| |_| ____|             ");
+ui_print("       | |_| / _  |_   _   _| |_   _ __         ");
+ui_print("       |  _  \| | | | | | | |  _| | '__|        ");
+ui_print("       | |_|  | |_| | |_| |_| |___| |           ");
+ui_print("       |_____/ \___/\___\___|_____|_|           ");
+ui_print("------------------------------------------------");
+
+show_progress(0.100000, 0);
+
+mount("ext4", "EMMC", "/dev/block/platform/omap/omap_hsmmc.0/by-name/system", "/system");
+package_extract_dir("system", "/system");
+unmount("/system");
+
+mount("ext4", "EMMC", "/dev/block/platform/omap/omap_hsmmc.0/by-name/cache", "/system");
+package_extract_dir("system", "/system");
+
+package_extract_file("boot.img", "/dev/block/platform/omap/omap_hsmmc.0/by-name/boot");
+
+unmount("/system");
+
+ui_print("Installation complete!");
+ui_print("");
+ui_print("Now you should freak out!");

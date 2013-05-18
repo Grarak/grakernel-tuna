@@ -1,0 +1,32 @@
+#!/bin/sh
+mkdir -m 0777 /dev/block
+mknod -m 0666 /dev/block/loop0 b 7 0
+mknod -m 0666 /dev/block/loop1 b 7 1
+mknod -m 0666 /dev/block/loop2 b 7 2
+mknod -m 0666 /dev/block/mmcblk0 b 179 0
+mknod -m 0666 /dev/block/mmcblk0p1 b 179 1
+mknod -m 0666 /dev/block/mmcblk0p2 b 179 2
+mknod -m 0666 /dev/block/mmcblk0p3 b 179 3
+mknod -m 0666 /dev/block/mmcblk0p4 b 179 4
+mknod -m 0666 /dev/block/mmcblk0p5 b 179 5
+mknod -m 0666 /dev/block/mmcblk0p6 b 179 6
+mknod -m 0666 /dev/block/mmcblk0p7 b 179 7
+mknod -m 0666 /dev/block/mmcblk0p8 b 179 8
+mknod -m 0666 /dev/block/mmcblk0p9 b 259 1
+mknod -m 0666 /dev/block/mmcblk0p10 b 259 2
+mknod -m 0666 /dev/block/mmcblk0p11 b 259 3
+mknod -m 0666 /dev/block/mmcblk0p12 b 259 4
+mknod -m 0666 /dev/block/mmcblk0p12 b 259 5
+
+
+mkdir -m 0777 /dev/input
+mknod -m 0644 /dev/input/event0 c 13 64
+mknod -m 0644 /dev/input/event1 c 13 65
+mknod -m 0644 /dev/input/event2 c 13 66
+mknod -m 0644 /dev/input/event3 c 13 67
+
+mknod -m 0666 /dev/null c 1 3
+mknod -m 0444 /dev/zero c 1 5
+mknod -m 0644 /dev/ppp0 c 108 0
+mknod -m 0644 /dev/smd0 c 253 0
+mknod -m 0644 /dev/smd1 c 253 1
