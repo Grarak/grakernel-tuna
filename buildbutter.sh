@@ -124,7 +124,7 @@ if [ -e arch/arm/boot/zImage ]; then
                 cd out/ButterKernelDual/META-INF/com/google/android
                 sed -i s/buildscriptline/${butterversion}/ updater-script
                 cd ../../../..
-                zip -r ButterKernel_Weekly_${butterversion}_dual.zip META-INF system boot.img
+                zip -r ButterKernel_Weekly_${butterversion}_dual.zip cleaner META-INF system boot.img
                 cp updater-script-original META-INF/com/google/android/updater-script
         fi
    
