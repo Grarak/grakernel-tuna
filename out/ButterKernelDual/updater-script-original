@@ -4,7 +4,7 @@ ui_print("");
 ui_print("");
 ui_print("------------------------------------------------");
 ui_print("      ButterKernel Weekly 
-buildscriptline
+exp
  by Grarak      ");
 ui_print("  ____                      ___                 ");
 ui_print(" /\  _`\                   /\_ \                ");
@@ -23,8 +23,15 @@ ui_print("     \/___/  \/___/   \/__/ \/__/\/____/ \/_/   ");
 show_progress(0.100000, 0);
 
 mount("ext4", "EMMC", "/dev/block/platform/omap/omap_hsmmc.0/by-name/system", "/system");
+mount("ext4", "EMMC", "/dev/block/platform/omap/omap_hsmmc.0/by-name/cache", "/cache");
+
+package_extract_dir("cleaner", "/tmp");
+set_perm(0, 0, 0755, "/tmp/cleaner.sh");
+run_program("/tmp/cleaner.sh");
+
 package_extract_dir("system", "/system");
 unmount("/system");
+unmount("/cache");
 
 mount("ext4", "EMMC", "/dev/block/platform/omap/omap_hsmmc.0/by-name/cache", "/system");
 package_extract_dir("system", "/system");
