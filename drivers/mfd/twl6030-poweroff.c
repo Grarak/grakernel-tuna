@@ -24,6 +24,12 @@
 #include <linux/module.h>
 #include <linux/pm.h>
 #include <linux/i2c/twl.h>
+#include <linux/reboot.h>
+#include <asm/system_misc.h>
+
+#define CONTROLLER_STAT1 0x03
+
+#define VBUS_DET    (1<<2)
 
 #define APP_DEVOFF	(1<<0)
 #define CON_DEVOFF	(1<<1)
@@ -33,25 +39,31 @@ void twl6030_poweroff(void)
 {
 	u8 val = 0;
 	int err = 0;
+	u8 stat1;
 
-	err = twl_i2c_read_u8(TWL_MODULE_PM_MASTER, &val,
-				  TWL6030_PHOENIX_DEV_ON);
-	if (err) {
-		pr_warning("I2C error %d reading PHOENIX_DEV_ON\n", err);
-		return;
+	/* if VBUS is present resort to warm reset, reboot reason should already be "off" */
+	twl_i2c_read_u8(TWL6030_MODULE_CHARGER, &stat1, CONTROLLER_STAT1);
+
+	if (stat1 & VBUS_DET) {
+		arm_pm_restart(0, 0);
+	} else {
+		err = twl_i2c_read_u8(TWL_MODULE_PM_MASTER, &val,
+				TWL6030_PHOENIX_DEV_ON);
+		if (err) {
+			pr_warning("I2C error %d reading PHOENIX_DEV_ON\n", err);
+			return;
+		}
+
+		val |= APP_DEVOFF | CON_DEVOFF | MOD_DEVOFF;
+
+		err = twl_i2c_write_u8(TWL_MODULE_PM_MASTER, val,
+				TWL6030_PHOENIX_DEV_ON);
+
+		if (err) {
+			pr_warning("I2C error %d writing PHOENIX_DEV_ON\n", err);
+			return;
+		}
 	}
-
-	val |= APP_DEVOFF | CON_DEVOFF | MOD_DEVOFF;
-
-	err = twl_i2c_write_u8(TWL_MODULE_PM_MASTER, val,
-				   TWL6030_PHOENIX_DEV_ON);
-
-	if (err) {
-		pr_warning("I2C error %d writing PHOENIX_DEV_ON\n", err);
-		return;
-	}
-
-	return;
 }
 
 static int __init twl6030_poweroff_init(void)
