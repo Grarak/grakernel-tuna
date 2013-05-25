@@ -11,7 +11,7 @@ bldcya=${txtbld}$(tput setaf 6) # cyan
 
 txtrst=$(tput sgr0) # Reset
 
-butterversion=v1.2.5
+butterversion=v1.2.6
 tcf=~/android/kernel/toolchains/
 
 DATE_START=$(date +"%s")
