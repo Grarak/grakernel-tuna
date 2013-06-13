@@ -14,7 +14,7 @@ static void run_trim_helper(struct early_suspend *handler)
         	"TERM=linux",
         	"PATH=/sbin:/system/bin:/data", NULL };
 
-	call_usermodehelper( argv[0], argv, envp, UMH_WAIT_EXEC );
+	call_usermodehelper( argv[0], argv, envp, UMH_WAIT_PROC );
 }
 
 static struct early_suspend suspend_fstrim = {
