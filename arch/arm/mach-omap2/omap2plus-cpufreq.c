@@ -72,8 +72,7 @@ static unsigned int current_target_freq;
 static unsigned int screen_off_max_freq;
 static bool omap_cpufreq_ready;
 static bool omap_cpufreq_suspended;
-static unsigned int current_cooling_level;
-int oc_val = 1;
+static int oc_val;
 
 #ifdef CONFIG_CPU_FREQ_GOV_INTELLIDEMAND
 extern bool lmf_screen_state;
@@ -616,28 +615,10 @@ static ssize_t store_gpu_oc(struct cpufreq_policy *policy, const char *buf, size
 	if (prev_oc == oc_val) return size;
 
         dev = omap_hwmod_name_get_dev("gpu");
-
-#ifdef CONFIG_PVR_GOVERNOR
-	if (prev_oc < 2 && oc_val == 2) {
-		ret1 = opp_disable(dev, gpu_freqs[1]);
-		ret2 = opp_enable(dev, gpu_freqs[oc_val]);
-		pr_info("[imoseyon] gpu top speed changed from %lu to %lu (%d,%d)\n", 
-			gpu_freqs[prev_oc], gpu_freqs[oc_val], ret1, ret2);
-	} else if (prev_oc == 2) {
-		ret1 = opp_disable(dev, gpu_freqs[prev_oc]);
-		ret2 = opp_enable(dev, gpu_freqs[1]);
-		pr_info("[imoseyon] gpu top speed changed from %lu to %lu (%d,%d)\n", 
-			gpu_freqs[prev_oc], gpu_freqs[oc_val], ret1, ret2);
-	} else {
-		pr_info("[imoseyon] gpu top speed changed from %lu to %lu\n", 
-			gpu_freqs[prev_oc], gpu_freqs[oc_val]);
-	}
-#else
         ret1 = opp_disable(dev, gpu_freqs[prev_oc]);
         ret2 = opp_enable(dev, gpu_freqs[oc_val]);
         pr_info("[imoseyon] gpu top speed changed from %lu to %lu (%d,%d)\n", 
 		gpu_freqs[prev_oc], gpu_freqs[oc_val], ret1, ret2);
-#endif
 
 	return size;
 }
@@ -740,6 +721,8 @@ static struct platform_device omap_cpufreq_device = {
 static int __init omap_cpufreq_init(void)
 {
 	int ret;
+
+	oc_val = 1;
 
 	if (cpu_is_omap24xx())
 		mpu_clk_name = "virt_prcm_set";

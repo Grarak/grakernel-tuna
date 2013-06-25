@@ -21,6 +21,7 @@
 #include <linux/interrupt.h>
 #include <linux/delay.h>
 #include <linux/irq.h>
+#include <linux/regulator/machine.h>
 
 #include <asm/hardware/gic.h>
 #include <asm/mach-types.h>
@@ -35,6 +36,7 @@
 #include <plat/omap-pm.h>
 #include <plat/gpmc.h>
 #include <plat/dma.h>
+#include <plat/omap_device.h>
 
 #include <mach/omap_fiq_debugger.h>
 
@@ -717,7 +719,56 @@ static inline u8 get_achievable_state(u8 available_states, u8 req_min_state,
 }
 
 /**
- * omap4_configure_pwdm_suspend() - Program powerdomain on suspend
+ * _set_pwrdm_state() - Program powerdomain to the requested state
+ * @pwrst: pwrdm state struct
+ *
+ * This takes pointer to power_state struct as the function parameter.
+ * Program pwrst and logic state of the requested pwrdm.
+ */
+static int _set_pwrdm_state(struct power_state *pwrst, u32 state,
+			    u32 logic_state)
+{
+	u32 als;
+	bool parent_power_domain = false;
+	int ret = 0;
+
+	pwrst->saved_state = pwrdm_read_next_pwrst(pwrst->pwrdm);
+	pwrst->saved_logic_state = pwrdm_read_logic_retst(pwrst->pwrdm);
+	if (!strcmp(pwrst->pwrdm->name, "core_pwrdm") ||
+		!strcmp(pwrst->pwrdm->name, "mpu_pwrdm") ||
+		!strcmp(pwrst->pwrdm->name, "iva_pwrdm"))
+			parent_power_domain = true;
+	/*
+	 * Write only to registers which are writable! Don't touch
+	 * read-only/reserved registers. If pwrdm->pwrsts_logic_ret or
+	 * pwrdm->pwrsts are 0, consider those power domains containing
+	 * readonly/reserved registers which cannot be controlled by
+	 * software.
+	 */
+	if (pwrst->pwrdm->pwrsts_logic_ret) {
+		als =
+		   get_achievable_state(pwrst->pwrdm->pwrsts_logic_ret,
+				logic_state, parent_power_domain);
+		if (als < pwrst->saved_logic_state)
+			ret = pwrdm_set_logic_retst(pwrst->pwrdm, als);
+	}
+
+	if (pwrst->pwrdm->pwrsts) {
+		pwrst->next_state =
+		   get_achievable_state(pwrst->pwrdm->pwrsts, state,
+						parent_power_domain);
+		if (pwrst->next_state < pwrst->saved_state)
+			ret |= omap_set_pwrdm_state(pwrst->pwrdm,
+					     pwrst->next_state);
+		else
+			pwrst->next_state = pwrst->saved_state;
+	}
+
+	return ret;
+}
+
+/**
+ * omap4_configure_pwrst() - Program powerdomain to their supported state
  * @is_off_mode: is this an OFF mode transition?
  *
  * Program all powerdomain to required power domain state: This logic
@@ -726,11 +777,12 @@ static inline u8 get_achievable_state(u8 available_states, u8 req_min_state,
  * each domain to the state requested. if the requested state is not
  * available, it will check for the higher state.
  */
-static void omap4_configure_pwdm_suspend(bool is_off_mode)
+static void omap4_configure_pwrst(bool is_off_mode)
 {
 	struct power_state *pwrst;
 	u32 state;
-	u32 logic_state, als;
+	u32 logic_state;
+	int ret = 0;
 
 #ifdef CONFIG_OMAP_ALLOW_OSWR
 	if (is_off_mode) {
@@ -746,42 +798,13 @@ static void omap4_configure_pwdm_suspend(bool is_off_mode)
 #endif
 
 	list_for_each_entry(pwrst, &pwrst_list, node) {
-		bool parent_power_domain = false;
-
-		pwrst->saved_state = pwrdm_read_next_pwrst(pwrst->pwrdm);
-		pwrst->saved_logic_state = pwrdm_read_logic_retst(pwrst->pwrdm);
-
 		if ((!strcmp(pwrst->pwrdm->name, "cpu0_pwrdm")) ||
 			(!strcmp(pwrst->pwrdm->name, "cpu1_pwrdm")))
 				continue;
-		if (!strcmp(pwrst->pwrdm->name, "core_pwrdm") ||
-			!strcmp(pwrst->pwrdm->name, "mpu_pwrdm") ||
-			!strcmp(pwrst->pwrdm->name, "iva_pwrdm"))
-				parent_power_domain = true;
-		/*
-		 * Write only to registers which are writable! Don't touch
-		 * read-only/reserved registers. If pwrdm->pwrsts_logic_ret or
-		 * pwrdm->pwrsts are 0, consider those power domains containing
-		 * readonly/reserved registers which cannot be controlled by
-		 * software.
-		 */
-		if (pwrst->pwrdm->pwrsts_logic_ret) {
-			als =
-			   get_achievable_state(pwrst->pwrdm->pwrsts_logic_ret,
-					logic_state, parent_power_domain);
-			if (als < pwrst->saved_logic_state)
-				pwrdm_set_logic_retst(pwrst->pwrdm, als);
-		}
-		if (pwrst->pwrdm->pwrsts) {
-			pwrst->next_state =
-			   get_achievable_state(pwrst->pwrdm->pwrsts, state,
-							parent_power_domain);
-			if (pwrst->next_state < pwrst->saved_state)
-				omap_set_pwrdm_state(pwrst->pwrdm,
-						     pwrst->next_state);
-			else
-				pwrst->next_state = pwrst->saved_state;
-		}
+
+		ret |= _set_pwrdm_state(pwrst, state, logic_state);
+		if (ret)
+			pr_err("Failed to setup powerdomains\n");
 	}
 }
 
@@ -867,7 +890,7 @@ static int omap4_pm_suspend(void)
 		omap2_pm_wakeup_on_timer(wakeup_timer_seconds,
 					 wakeup_timer_milliseconds);
 
-	omap4_configure_pwdm_suspend(off_mode_enabled);
+	omap4_configure_pwrst(off_mode_enabled);
 
 	/* Enable Device OFF */
 	if (off_mode_enabled)
@@ -923,13 +946,29 @@ static int omap4_pm_enter(suspend_state_t suspend_state)
 
 static int omap4_pm_begin(suspend_state_t state)
 {
+	int ret = 0;
+
 	disable_hlt();
+
+	ret = regulator_suspend_prepare(state);
+	if (ret)
+		pr_err("%s: Regulator suspend prepare failed (%d)!\n",
+				__func__, ret);
+
 	return 0;
 }
 
 static void omap4_pm_end(void)
 {
+	int ret = 0;
+
 	enable_hlt();
+
+	ret = regulator_suspend_finish();
+	if (ret)
+		pr_err("%s: resume regulators from suspend failed (%d)!\n",
+				__func__, ret);
+
 	return;
 }
 
@@ -991,6 +1030,8 @@ static int __init clkdms_setup(struct clockdomain *clkdm, void *unused)
 static int __init pwrdms_setup(struct powerdomain *pwrdm, void *unused)
 {
 	struct power_state *pwrst;
+	int ret = 0;
+	u32 state, logic_state;
 
 	if (!pwrdm->pwrsts)
 		return 0;
@@ -999,17 +1040,32 @@ static int __init pwrdms_setup(struct powerdomain *pwrdm, void *unused)
 	if (!pwrst)
 		return -ENOMEM;
 
+#ifdef CONFIG_OMAP_ALLOW_OSWR
+	if (off_mode_enabled) {
+		state = PWRDM_POWER_OFF;
+		logic_state = PWRDM_POWER_OFF;
+	} else {
+		state = PWRDM_POWER_RET;
+		logic_state = PWRDM_POWER_OFF;
+	}
+#else
+	state = PWRDM_POWER_RET;
+	logic_state = PWRDM_POWER_RET;
+#endif
+
 	pwrst->pwrdm = pwrdm;
+
 	if ((!strcmp(pwrdm->name, "mpu_pwrdm")) ||
 			(!strcmp(pwrdm->name, "core_pwrdm")) ||
 			(!strcmp(pwrdm->name, "cpu0_pwrdm")) ||
 			(!strcmp(pwrdm->name, "cpu1_pwrdm")))
 		pwrst->next_state = PWRDM_POWER_ON;
 	else
-		pwrst->next_state = PWRDM_POWER_RET;
+		ret = _set_pwrdm_state(pwrst, state, logic_state);
+
 	list_add(&pwrst->node, &pwrst_list);
 
-	return omap_set_pwrdm_state(pwrst->pwrdm, pwrst->next_state);
+	return ret;
 }
 
 static int __init _voltdm_sum_time(struct voltagedomain *voltdm, void *user)
@@ -1406,6 +1462,8 @@ static int __init omap4_pm_init(void)
 	int ret = 0;
 	struct clockdomain *l3_1_clkdm, *l4wkup;
 	struct clockdomain *ducati_clkdm, *l3_2_clkdm, *l4_per, *l4_cfg;
+	char *init_devices[] = {"mpu", "iva"};
+	int i;
 
 	if (!cpu_is_omap44xx())
 		return -ENODEV;
@@ -1580,6 +1638,36 @@ static int __init omap4_pm_init(void)
 	omap_pm_is_ready_status = true;
 	/* let the other CPU know as well */
 	smp_wmb();
+
+	/* Setup the scales for every init device appropriately */
+	for (i = 0; i < ARRAY_SIZE(init_devices); i++) {
+		struct omap_hwmod *oh = omap_hwmod_lookup(init_devices[i]);
+		struct clk *clk;
+		struct device *dev;
+		unsigned int rate;
+
+		if (!oh || !oh->od || !oh->main_clk) {
+			pr_warn("%s: no hwmod or odev or clk for %s, [%d] "
+				"oh=%p od=%p clk=%p cannot add OPPs.\n",
+				__func__, init_devices[i], i, oh,
+				(oh) ? oh->od : NULL,
+				(oh) ? oh->main_clk :  NULL);
+			continue;
+		}
+
+		clk = oh->_clk;
+		dev = &oh->od->pdev.dev;
+		/* Get the current rate */
+		rate = clk_get_rate(clk);
+
+		/* Update DVFS framework with rate information */
+		ret = omap_device_scale(dev, dev, rate);
+		if (ret) {
+			dev_warn(dev, "%s unable to scale to %d - %d\n",
+				__func__, rate, ret);
+			/* Continue to next device */
+		}
+	}
 
 err2:
 	return ret;
