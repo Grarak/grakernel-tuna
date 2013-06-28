@@ -50,7 +50,7 @@
 #define MAX_FREQUENCY_UP_THRESHOLD              (100)
 #define FREQ_STEP                               (40)
 #define UP_THRESHOLD_AT_MIN_FREQ                (40)
-#define FREQ_FOR_RESPONSIVENESS                 (800000)
+#define FREQ_FOR_RESPONSIVENESS                 (795000)
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
 #define DEF_SUSPEND_FREQ			(700000)
