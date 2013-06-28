@@ -13,7 +13,7 @@
 
 #define VIBRATORCONTROL_VERSION 1
 
-#define MAX_VIBSTRENGTH 1600
+#define MAX_VIBSTRENGTH 1450
 #define MIN_VIBSTRENGTH 1000
 
 static int vib_strength;
