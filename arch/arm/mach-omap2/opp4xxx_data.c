@@ -241,7 +241,7 @@ static struct omap_opp_def __initdata omap446x_opp_def_list[] = {
         OPP_INITIALIZER("mpu", "virt_dpll_mpu_ck", "mpu", true, 180000000, OMAP4460_VDD_MPU_OPP15_UV),
         /* MPU OPP1 - OPP25 */
         OPP_INITIALIZER("mpu", "virt_dpll_mpu_ck", "mpu", true, 230000000, OMAP4460_VDD_MPU_OPP25_UV),
-	/* MPU OPP1 - OPP50 */
+        /* MPU OPP1 - OPP50 */
 	OPP_INITIALIZER("mpu", "virt_dpll_mpu_ck", "mpu", true, 350000000, OMAP4460_VDD_MPU_OPP50_UV),
         /* MPU OPP1 - OPP75 */
 	OPP_INITIALIZER("mpu", "virt_dpll_mpu_ck", "mpu", true, 460000000, OMAP4460_VDD_MPU_OPP75_UV),
