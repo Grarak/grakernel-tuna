@@ -1,6 +1,6 @@
 #
 # Automatically generated make config: don't edit
-# Linux/arm 3.0.78 Kernel Configuration
+# Linux/arm 3.0.84 Kernel Configuration
 #
 CONFIG_ARM=y
 CONFIG_HAVE_PWM=y
@@ -37,7 +37,7 @@ CONFIG_IRQ_WORK=y
 CONFIG_EXPERIMENTAL=y
 CONFIG_INIT_ENV_ARG_LIMIT=32
 CONFIG_CROSS_COMPILE=""
-CONFIG_LOCALVERSION="-Butter_Weekly_exp_4.2.+"
+CONFIG_LOCALVERSION="-Butter_Weekly_v1.2.6_4.2.+"
 # CONFIG_LOCALVERSION_AUTO is not set
 CONFIG_HAVE_KERNEL_GZIP=y
 CONFIG_HAVE_KERNEL_LZMA=y
@@ -46,7 +46,7 @@ CONFIG_KERNEL_GZIP=y
 # CONFIG_KERNEL_LZMA is not set
 # CONFIG_KERNEL_LZO is not set
 CONFIG_DEFAULT_HOSTNAME="(none)"
-# CONFIG_SWAP is not set
+CONFIG_SWAP=y
 CONFIG_SYSVIPC=y
 CONFIG_SYSVIPC_SYSCTL=y
 # CONFIG_POSIX_MQUEUE is not set
@@ -978,6 +978,7 @@ CONFIG_MTD_BLOCK=y
 # CONFIG_SSFDC is not set
 # CONFIG_SM_FTL is not set
 # CONFIG_MTD_OOPS is not set
+CONFIG_MTD_SWAP=y
 
 #
 # RAM/ROM/Flash chip drivers
