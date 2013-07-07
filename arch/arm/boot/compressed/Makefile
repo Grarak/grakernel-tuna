@@ -25,9 +25,7 @@ MISC = misc.o
 
 AFLAGS_decompress.o += -Wa,-march=armv7-a$(plus_sec)
 DECOMPRESS = decompress.o
-ifeq ($(CONFIG_KERNEL_LZ4),y)
-CFLAGS_decompress.o := -Os
-endif
+
 FONTC	= $(srctree)/drivers/video/console/font_acorn_8x8.c
 
 #
