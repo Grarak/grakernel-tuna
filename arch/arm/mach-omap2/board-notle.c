@@ -1810,11 +1810,9 @@ static void __init notle_i2c_irq_fixup(void)
 static int __init notle_bq27520_init(void)
 {
 	int soc_int_gpio, soc_int_irq;
-	int bat_low_gpio, bat_low_irq;
 	int res;
 
 	soc_int_gpio = notle_get_gpio(GPIO_SOC_INT_INDEX);
-	bat_low_gpio = notle_get_gpio(GPIO_BAT_LOW_INDEX);
 
 	res = gpio_request_one(soc_int_gpio, GPIOF_IN, "soc_int_n");
 	if (res) {
@@ -1830,25 +1828,10 @@ static int __init notle_bq27520_init(void)
 		goto error;
 	}
 
-	res = gpio_request_one(bat_low_gpio, GPIOF_IN, "bat_low_n");
-	if (res) {
-		pr_err("%s: Failed to get bat_low gpio: %d\n", __func__, res);
-		goto error;
-	}
-
-	bat_low_irq = gpio_to_irq(bat_low_gpio);
-
-	res = irq_set_irq_wake(bat_low_irq, 1);
-	if (res) {
-		pr_err("%s: Failed to set irq wake for bat_low: %d\n", __func__, res);
-		goto error;
-	}
-
-	pr_warn("%s: soc_int_gpio=%d soc_int_irq=%d bat_low_gpio=%d bat_low_irq=%d\n",
-			__func__, soc_int_gpio, soc_int_irq, bat_low_gpio, bat_low_irq);
+	pr_warn("%s: soc_int_gpio=%d soc_int_irq=%d\n",
+			__func__, soc_int_gpio, soc_int_irq);
 
 	notle_gasgauge_platform_data.soc_int_irq = soc_int_irq;
-	notle_gasgauge_platform_data.bat_low_irq = bat_low_irq;
 
 	return 0;
 
@@ -1998,7 +1981,7 @@ static struct omap_board_mux evt2_board_wkup_mux[] __initdata = {
     OMAP4_MUX(SIM_CLK,              OMAP_MUX_MODE3 | OMAP_PIN_INPUT_PULLUP),                     // BLINK_INT
     OMAP4_MUX(SIM_PWRCTRL,          OMAP_MUX_MODE3 | OMAP_PIN_INPUT | OMAP_WAKEUP_EN),           // MPU9000_INT_TIMER
     OMAP4_MUX(SIM_RESET,            OMAP_MUX_MODE3 | OMAP_PIN_INPUT),   // BCM_BT_HOST_WAKE
-    OMAP4_MUX(FREF_CLK3_OUT,        OMAP_MUX_MODE3 | OMAP_PIN_INPUT),   // BAT_LOW
+    OMAP4_MUX(FREF_CLK3_OUT,        OMAP_MUX_MODE7),                    // BAT_LOW
     OMAP4_MUX(SYS_PWRON_RESET_OUT,  OMAP_MUX_MODE7 ),                   // FPGA_CBSEL0
 	{ .reg_offset = OMAP_MUX_TERMINATOR },
 };
