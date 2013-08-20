@@ -215,9 +215,9 @@ catags_empty:
 
 		mov	r5, #0					@ iterator
 catags_cpy:
-		ldrb	r0, [r8, r5]
-		strb	r0, [r2, r5]
-		add	r5, r5, #1
+		ldr	r0, [r8, r5]
+		str	r0, [r2, r5]
+		add	r5, r5, #4
 		cmp	r5, r4
 		blo	catags_cpy
 
