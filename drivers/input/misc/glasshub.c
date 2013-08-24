@@ -1606,6 +1606,68 @@ err_out:
 	return -EINVAL;
 }
 
+static int flash_page_l(struct glasshub_data *glasshub, int no_line_checksum, int page)
+{
+	uint8_t buffer[FIRMWARE_PAGE_SIZE+3];
+	uint8_t line_checksum;
+	int i, j;
+	int rc = 0;
+
+	/* initalize command and page number */
+	buffer[0] = CMD_FLASH;
+	buffer[1] = page;
+
+	/* seed line checksum */
+	line_checksum = 0xa5;
+
+	/* copy firmware into buffer */
+	for (i = 2, j = page * FIRMWARE_PAGE_SIZE;
+			i < FIRMWARE_PAGE_SIZE + 2;
+			i++, j++) {
+		buffer[i] = glasshub->fw_image[j];
+		line_checksum = (line_checksum << 1) ^ buffer[i] ^ (line_checksum >> 7);
+	}
+
+	/* add checksum to buffer */
+	buffer[66] = line_checksum;
+
+#if DEBUG_FIRMWARE_UPDATE
+	dev_info(&glasshub->i2c_client->dev,
+			"%s: Flash page %d\n",
+			__FUNCTION__, page);
+#endif
+	/* don't send checksum for older bootloader version */
+	rc = _i2c_write_mult(glasshub, buffer,
+			sizeof(buffer) - no_line_checksum);
+	if (rc) {
+		set_bit(FLAG_DEVICE_MAY_BE_WEDGED, &glasshub->flags);
+		dev_err(&glasshub->i2c_client->dev,
+				"%s Unable to flash glasshub device\n",
+				__FUNCTION__);
+		return FLASH_ERROR_I2C_DEVICE_COMM;
+	}
+
+	/* new bootloader: check status for error */
+	if (!no_line_checksum) {
+		buffer[0] = CMD_FLASH_STATUS;
+		rc = _i2c_read(glasshub, buffer, 1, buffer, 1);
+		if (rc) {
+			set_bit(FLAG_DEVICE_MAY_BE_WEDGED, &glasshub->flags);
+			dev_err(&glasshub->i2c_client->dev,
+					"%s Error reading flash status\n",
+					__FUNCTION__);
+			return FLASH_ERROR_I2C_DEVICE_COMM;
+		} else if (buffer[0] != 0) {
+			dev_err(&glasshub->i2c_client->dev,
+					"%s Device rejected packet: %u\n",
+					__FUNCTION__, buffer[0]);
+			return FLASH_ERROR_DEV_REJECTED_PKT;
+		}
+	}
+	return FLASH_STATUS_OK;
+}
+
+
 /* flash firmware to MCU */
 static int flash_firmware_l(struct glasshub_data *glasshub, int no_line_checksum)
 {
@@ -1617,61 +1679,10 @@ static int flash_firmware_l(struct glasshub_data *glasshub, int no_line_checksum
 		/* flash only dirty pages */
 		if (glasshub->fw_dirty[page / 32] &
 				(1 << (page & 31))) {
-			uint8_t buffer[FIRMWARE_PAGE_SIZE+3];
-			uint8_t line_checksum;
-			int i, j;
-
-			/* initalize command and page number */
-			buffer[0] = CMD_FLASH;
-			buffer[1] = page;
-
-			/* seed line checksum */
-			line_checksum = 0xa5;
-
-			/* copy firmware into buffer */
-			for (i = 2, j = page * FIRMWARE_PAGE_SIZE;
-					i < FIRMWARE_PAGE_SIZE + 2;
-					i++, j++) {
-				buffer[i] = glasshub->fw_image[j];
-				line_checksum = (line_checksum << 1) ^ buffer[i] ^ (line_checksum >> 7);
-			}
-
-			/* add checksum to buffer */
-			buffer[66] = line_checksum;
-
-#if DEBUG_FIRMWARE_UPDATE
-			dev_info(&glasshub->i2c_client->dev,
-					"%s: Flash page %d\n",
-					__FUNCTION__, page);
-#endif
-			/* don't send checksum for older bootloader version */
-			rc = _i2c_write_mult(glasshub, buffer,
-					sizeof(buffer) - no_line_checksum);
-			if (rc) {
-				set_bit(FLAG_DEVICE_MAY_BE_WEDGED, &glasshub->flags);
-				dev_err(&glasshub->i2c_client->dev,
-						"%s Unable to flash glasshub device\n",
-						__FUNCTION__);
-				return FLASH_ERROR_I2C_DEVICE_COMM;
-			}
-
-			/* new bootloader: check status for error */
-			if (!no_line_checksum) {
-				buffer[0] = CMD_FLASH_STATUS;
-				rc = _i2c_read(glasshub, buffer, 1, buffer, 1);
-				if (rc) {
-					set_bit(FLAG_DEVICE_MAY_BE_WEDGED, &glasshub->flags);
-					dev_err(&glasshub->i2c_client->dev,
-							"%s Error reading flash status\n",
-							__FUNCTION__);
-					return FLASH_ERROR_I2C_DEVICE_COMM;
-				} else if (buffer[0] != 0) {
-					dev_err(&glasshub->i2c_client->dev,
-							"%s Device rejected packet: %u\n",
-							__FUNCTION__, buffer[0]);
-					return FLASH_ERROR_DEV_REJECTED_PKT;
-				}
-			}
+			rc = flash_page_l(glasshub, no_line_checksum, page);
+			/* retry rejected packet */
+			if (rc == FLASH_ERROR_DEV_REJECTED_PKT)
+				rc = flash_page_l(glasshub, no_line_checksum, page);
 			++pages_flashed;
 		}
 	}
