@@ -1924,10 +1924,10 @@ static int __init notle_i2c_init(void)
 
 	omap4_pmic_init("twl6030", &notle_twldata, &twl6040_data, OMAP44XX_IRQ_SYS_2N);
 	notle_i2c_irq_fixup();
-	omap_register_i2c_bus(2, 400, NULL, 0);
-	omap_register_i2c_bus(3, 400, notle_i2c_3_boardinfo,
+	omap_register_i2c_bus(2, 384, NULL, 0);
+	omap_register_i2c_bus(3, 384, notle_i2c_3_boardinfo,
 			ARRAY_SIZE(notle_i2c_3_boardinfo));
-	omap_register_i2c_bus(4, 400, notle_i2c_4_boardinfo,
+	omap_register_i2c_bus(4, 384, notle_i2c_4_boardinfo,
 			ARRAY_SIZE(notle_i2c_4_boardinfo));
 	return 0;
 }

@@ -117,7 +117,11 @@ void __init omap4_pmic_init(const char *pmic_type,
 	omap4_i2c1_board_info[1].irq = twl6040_irq;
 	omap4_i2c1_board_info[1].platform_data = twl6040_data;
 
+#if defined(CONFIG_MACH_NOTLE)
+	omap_register_i2c_bus(1, 384, omap4_i2c1_board_info, 2);
+#else
 	omap_register_i2c_bus(1, 400, omap4_i2c1_board_info, 2);
+#endif
 
 }
 
