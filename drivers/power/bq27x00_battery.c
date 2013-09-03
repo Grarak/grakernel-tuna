@@ -1101,7 +1101,7 @@ static int bq27x00_battery_probe(struct i2c_client *client,
 	i2c_set_clientdata(client, di);
 
 	di->nb.notifier_call = bq27x00_usb_notifier_call;
-	palmas_usb_register_notifier(&di->nb);
+	usb_register_notifier(usb_get_phy(USB_PHY_TYPE_USB2), &di->nb);
 
 	/* Register Battery as cooling device for Case domain */
 	if (di->battery_present) {

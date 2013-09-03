@@ -10,6 +10,12 @@ config PANEL_GENERIC_DPI
 	  Supports LCD Panel used in TI SDP3430 and EVM boards,
 	  OMAP3517 EVM boards and CM-T35.
 
+config PANEL_NOTLE_DPI
+	tristate "Notle DPI Panel"
+	depends on OMAP2_DSS_DPI && SPI
+	help
+	  Notle DPI panel driver for FPGA and Panel on Notle boards.
+
 config PANEL_DVI
 	tristate "DVI output"
 	depends on OMAP2_DSS_DPI && I2C

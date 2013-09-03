@@ -52,6 +52,8 @@
 #define DISPC_IRQ_WBBUFFEROVERFLOW	(1 << 25)
 #define DISPC_IRQ_WBINCOMPLETE		(1 << 26)
 
+#define OMAP_DSS_GAMMA_TABLE_SIZE 256
+
 struct omap_dss_device;
 struct omap_overlay_manager;
 
@@ -599,6 +601,10 @@ struct omap_overlay_manager_info {
 	struct omap_dss_cpr_coefs cpr_coefs;
 
 	struct omapdss_ovl_cb cb;
+
+	bool gamma_enable;
+	bool gamma_table_dirty;
+	u32* gamma_table;
 };
 
 struct omap_overlay_manager {
@@ -756,7 +762,8 @@ struct omap_dss_device {
 	} ctrl;
 
 	int reset_gpio;
-
+	int vsync_gpio;
+	bool skip_init;
 	int max_backlight_level;
 
 	const char *name;

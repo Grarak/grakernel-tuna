@@ -953,16 +953,20 @@ static u32 dispc_ovl_get_burst_size(enum omap_plane plane)
 
 void dispc_enable_gamma_table(bool enable)
 {
-	/*
-	 * This is partially implemented to support only disabling of
-	 * the gamma table.
-	 */
-	if (enable) {
-		DSSWARN("Gamma table enabling for TV not yet supported");
-		return;
-	}
-
 	REG_FLD_MOD(DISPC_CONFIG, enable, 9, 9);
+}
+
+void dispc_set_gamma_table(enum omap_channel channel, u32 *table)
+{
+       int i;
+
+       if (channel != OMAP_DSS_CHANNEL_LCD2) {
+               return;
+       }
+
+       for (i = 0; i < 256; i++) {
+               dispc_write_reg(DISPC_GAMMA_TABLE1, *table++);
+       }
 }
 
 static void dispc_mgr_enable_cpr(enum omap_channel channel, bool enable)
@@ -2919,6 +2923,9 @@ void dispc_mgr_setup(enum omap_channel channel,
 		dispc_mgr_enable_cpr(channel, info->cpr_enable);
 		dispc_mgr_set_cpr_coef(channel, &info->cpr_coefs);
 	}
+	dispc_enable_gamma_table(info->gamma_enable);
+	if (info->gamma_table_dirty)
+	       dispc_set_gamma_table(channel, info->gamma_table);
 }
 
 void dispc_mgr_set_tft_data_lines(enum omap_channel channel, u8 data_lines)

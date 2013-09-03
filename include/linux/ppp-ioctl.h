@@ -116,4 +116,6 @@ struct pppol2tp_ioc_stats {
 #define SIOCGPPPVER     (SIOCDEVPRIVATE + 1)	/* NEVER change this!! */
 #define SIOCGPPPCSTATS  (SIOCDEVPRIVATE + 2)
 
+#define PPP_MTU 1500
+
 #endif /* _PPP_IOCTL_H */

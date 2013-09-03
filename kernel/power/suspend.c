@@ -29,6 +29,17 @@
 
 #include "power.h"
 
+static unsigned int suspend_cnt = 0;
+
+unsigned int get_suspend_cnt(void) {
+	return suspend_cnt;
+}
+EXPORT_SYMBOL(get_suspend_cnt);
+
+static void inc_suspend_cnt(void) {
+	suspend_cnt++;
+}
+
 const char *const pm_states[PM_SUSPEND_MAX] = {
 #ifdef CONFIG_EARLYSUSPEND
 	[PM_SUSPEND_ON]		= "on",
@@ -227,6 +238,7 @@ int suspend_devices_and_enter(suspend_state_t state)
 	if (suspend_test(TEST_DEVICES))
 		goto Recover_platform;
 
+	inc_suspend_cnt();
 	do {
 		error = suspend_enter(state, &wakeup);
 	} while (!error && !wakeup

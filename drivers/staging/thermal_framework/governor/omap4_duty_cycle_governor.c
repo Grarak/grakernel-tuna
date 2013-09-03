@@ -26,17 +26,22 @@
 #define NORMAL_MONITORING_RATE 10000
 #define TEMP_THRESHOLD 1
 #define INIT_SECTION -1
+#define DEBUG_DUMP_ACTIVE_PROFILE 0x00000001
 
 struct duty_governor {
 	struct pcb_sens *tpcb;
 	struct duty_cycle *tduty;
 	struct pcb_section *tpcb_sections;
+	struct pcb_section *turbo_sprint_tpcb_sections;
 	int period;
 	int previous_temp;
 	int curr_pcb_temp;
 	int previous_pcb_temp;
+	bool cur_turbo_sprint;
 	int working_section;
 	int npcb_sections;
+	int turbo_sprint_working_session;
+	int turbo_sprint_npcb_sections;
 	struct delayed_work duty_cycle_governor_work;
 };
 
@@ -46,6 +51,8 @@ static DEFINE_MUTEX(mutex_duty_governor);
 static struct duty_governor *t_governor;
 static struct pcb_section *pcb_sections;
 static int pcb_sections_size;
+static struct pcb_section *turbo_sprint_pcb_sections;
+static int turbo_sprint_pcb_sections_size;
 
 static void omap4_duty_schedule(struct duty_governor *t_gov)
 {
@@ -77,7 +84,7 @@ int omap4_duty_pcb_register(struct pcb_sens *tpcb)
 
 	return 0;
 }
-static bool is_treshold(struct duty_governor *tgov)
+static bool is_threshold(struct duty_governor *tgov)
 {
 	int delta;
 
@@ -89,52 +96,126 @@ static bool is_treshold(struct duty_governor *tgov)
 	return false;
 }
 
-static int omap4_duty_apply_constraint(struct duty_governor *tgov,
-					int sect_num)
+static bool has_turbo_sprint(struct duty_governor *tgov)
 {
-	struct pcb_section *t_pcb_sections = &tgov->tpcb_sections[sect_num];
+	return (tgov->tpcb && tgov->tpcb->turbo_sprint);
+}
+
+static bool turbo_sprint_changed(struct duty_governor *tgov)
+{
+	return (tgov->tpcb->turbo_sprint() != tgov->cur_turbo_sprint);
+}
+
+static bool has_debug(struct duty_governor *tgov)
+{
+	return (tgov->tpcb && tgov->tpcb->debug);
+}
+
+static int get_debug(struct duty_governor *tgov)
+{
+	if (has_debug(tgov)) {
+		return tgov->tpcb->debug();
+	}
+	return 0;
+}
+
+static int omap4_duty_apply_constraint(struct duty_governor *tgov,
+										struct pcb_section *t_pcb_sections)
+{
 	struct duty_cycle_params *tduty_params = &t_pcb_sections->tduty_params;
 	int dc_enabled = t_pcb_sections->duty_cycle_enabled;
 	struct duty_cycle *t_duty = tgov->tduty;
 	int ret = true;
 
-	if (tgov->working_section != sect_num) {
-		ret = tgov->tduty->enable(false, false);
+	ret = tgov->tduty->enable(false, false);
 
-		if (ret)
+	if (ret)
+		return ret;
+	
+	if (dc_enabled) {
+		if (t_duty->update_params(tduty_params))
 			return ret;
-
-		if (dc_enabled) {
-			if (t_duty->update_params(tduty_params))
-				return ret;
-
-			tgov->tduty->enable(dc_enabled, true);
-		}
-		tgov->working_section = sect_num;
+		tgov->tduty->enable(dc_enabled, true);
 	}
 
 	return ret;
+}
+
+static void dump_active_profile(struct duty_governor *tgov) {
+	struct pcb_section * sections = tgov->tpcb_sections;
+	int num_sections = tgov->npcb_sections;
+	int working_section = tgov->working_section;
+
+	if (tgov->cur_turbo_sprint) {
+		num_sections = tgov->turbo_sprint_npcb_sections;
+		sections     = tgov->turbo_sprint_tpcb_sections;
+		working_section = tgov->turbo_sprint_working_session;
+	}
+
+	if ((working_section < 0) ||
+			(working_section>num_sections)) {
+		return;
+	}
+
+	printk("omap4_duty_cycle_governor: Active Profile\n");
+	printk("omap4_duty_cycle_governor: ====>         Temperature: %d\n", sections[working_section].pcb_temp_level);
+	printk("omap4_duty_cycle_governor: ====>            Max Freq: %d\n", sections[working_section].max_opp);
+	printk("omap4_duty_cycle_governor: ====>          Nitro Rate: %d\n", sections[working_section].tduty_params.nitro_rate);
+	printk("omap4_duty_cycle_governor: ====>        Cooling Rate: %d\n", sections[working_section].tduty_params.cooling_rate);
+	printk("omap4_duty_cycle_governor: ====>      Nitro Interval: %d\n", sections[working_section].tduty_params.nitro_interval);
+	printk("omap4_duty_cycle_governor: ====>    Nitro Percentage: %d\n", sections[working_section].tduty_params.nitro_percentage);
+	printk("omap4_duty_cycle_governor: ====>  Duty Cycle Enabled: %d\n", sections[working_section].duty_cycle_enabled);
+	printk("omap4_duty_cycle_governor: ====>        Current Temp: %d\n", tgov->curr_pcb_temp);
+	printk("omap4_duty_cycle_governor: ====>Turbo Sprint Enabled: %d\n", tgov->cur_turbo_sprint);
 }
 
 static void omap4_duty_update(struct duty_governor *tgov)
 {
 	int sect_num;
 
+	int num_sections = tgov->npcb_sections;
+	struct pcb_section * sections = tgov->tpcb_sections;
+	int * working_section = &tgov->working_section;
+
 	if (IS_ERR_OR_NULL(tgov) ||
-	    IS_ERR_OR_NULL(tgov->tduty) ||
-	    IS_ERR_OR_NULL(tgov->tpcb_sections))
+			IS_ERR_OR_NULL(tgov->tduty) ||
+			IS_ERR_OR_NULL(tgov->tpcb_sections))
 		return;
 
-	for (sect_num = 0; sect_num < tgov->npcb_sections; sect_num++)
-		if (tgov->tpcb_sections[sect_num].pcb_temp_level >
-		    tgov->curr_pcb_temp)
+	if (has_turbo_sprint(t_governor)) {
+		// Update Overdrive state and reset working section if needed
+		bool turbo_sprint = tgov->tpcb->turbo_sprint();
+		if (turbo_sprint != tgov->cur_turbo_sprint) {
+			// Reset Working Session
+			tgov->working_section = INIT_SECTION;
+			tgov->turbo_sprint_working_session = INIT_SECTION;
+		}
+		tgov->cur_turbo_sprint = tgov->tpcb->turbo_sprint();
+	}
+
+	// override section if turbo sprint is on
+	if (tgov->cur_turbo_sprint) {
+		num_sections    = tgov->turbo_sprint_npcb_sections;
+		sections        = tgov->turbo_sprint_tpcb_sections;
+		working_section = &tgov->turbo_sprint_working_session;
+	}
+
+	for (sect_num = 0; sect_num < num_sections; sect_num++)
+		if (sections[sect_num].pcb_temp_level > tgov->curr_pcb_temp)
 			break;
 
-	if (sect_num >= tgov->npcb_sections)
-		sect_num = tgov->npcb_sections - 1;
+	if (sect_num >= num_sections)
+		sect_num = num_sections - 1;
 
-	if (omap4_duty_apply_constraint(tgov, sect_num))
-		tgov->previous_pcb_temp = tgov->curr_pcb_temp;
+	// Update working session
+	if (*working_section != sect_num) {
+		if (omap4_duty_apply_constraint(tgov, &sections[sect_num] ))
+			tgov->previous_pcb_temp = tgov->curr_pcb_temp;
+		*working_section = sect_num;
+	}
+
+	if (get_debug(tgov) & DEBUG_DUMP_ACTIVE_PROFILE)
+		dump_active_profile(tgov);
 }
 
 static void omap4_duty_governor_delayed_work_fn(struct work_struct *work)
@@ -145,8 +226,14 @@ static void omap4_duty_governor_delayed_work_fn(struct work_struct *work)
 		if (!IS_ERR_OR_NULL(t_governor->tpcb->update_temp)) {
 			t_governor->curr_pcb_temp =
 					t_governor->tpcb->update_temp();
-			if (is_treshold(t_governor))
-				omap4_duty_update(t_governor);
+			if (has_turbo_sprint(t_governor)) {
+				if (is_threshold(t_governor) || turbo_sprint_changed(t_governor)) {
+					omap4_duty_update(t_governor);
+				}
+			} else {
+				if (is_threshold(t_governor))
+					omap4_duty_update(t_governor);
+			}
 		} else {
 			pr_err("%s:update_temp() isn't defined\n", __func__);
 		}
@@ -213,6 +300,12 @@ void omap4_duty_pcb_section_reg(struct pcb_section *pcb_sect, int sect_size)
 	mutex_unlock(&mutex_duty_governor);
 }
 
+void omap4_duty_turbo_sprint_pcb_section_reg(struct pcb_section *pcb_sect, int sect_size)
+{
+	turbo_sprint_pcb_sections = pcb_sect;
+	turbo_sprint_pcb_sections_size = sect_size;
+}
+
 static struct notifier_block omap4_duty_pm_notifier = {
 	.notifier_call = omap4_duty_pm_notifier_cb,
 };
@@ -232,6 +325,9 @@ static int __init omap4_duty_governor_init(void)
 	t_governor->previous_temp = DUTY_GOVERNOR_DEFAULT_TEMP;
 	t_governor->tpcb_sections = pcb_sections;
 	t_governor->npcb_sections = pcb_sections_size;
+	t_governor->cur_turbo_sprint = false;
+	t_governor->turbo_sprint_tpcb_sections = turbo_sprint_pcb_sections;
+	t_governor->turbo_sprint_npcb_sections = turbo_sprint_pcb_sections_size;
 	t_governor->working_section = INIT_SECTION;
 
 	if (register_pm_notifier(&omap4_duty_pm_notifier))

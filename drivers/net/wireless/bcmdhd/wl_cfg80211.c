@@ -6433,8 +6433,12 @@ s32 wl_cfg80211_attach(struct net_device *ndev, void *data)
 		WL_ERR(("Failed to init iwm_priv (%d)\n", err));
 		goto cfg80211_attach_out;
 	}
-
-	err = wl_setup_rfkill(wl, TRUE);
+	err = wl_cfgp2p_init_priv(wl);
+	if (err) {
+		WL_ERR(("Failed to setup P2P %d\n", err));
+		goto cfg80211_attach_out;
+	}
+        err = wl_setup_rfkill(wl, TRUE);
 	if (err) {
 		WL_ERR(("Failed to setup rfkill %d\n", err));
 		goto cfg80211_attach_out;

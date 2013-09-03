@@ -315,6 +315,28 @@ static ssize_t state_store(struct kobject *kobj, struct kobj_attribute *attr,
 
 power_attr(state);
 
+/**
+ *	suspend_cycle_cnt - Display counts of successful suspend-resume cycles.
+ *
+ *	show() returns count of successful suspend-resume cycle.
+ *
+ *	store() Invalid.
+ */
+static ssize_t suspend_cycle_cnt_show(struct kobject *kobj, struct kobj_attribute *attr,
+                                      char *buf)
+{
+	sprintf(buf, "%d\n", get_suspend_cnt());
+	return strlen(buf);
+}
+
+static ssize_t suspend_cycle_cnt_store(struct kobject *kobj, struct kobj_attribute *attr,
+                                       const char *buf, size_t n)
+{
+	return -EINVAL;
+}
+
+power_attr(suspend_cycle_cnt);
+
 #ifdef CONFIG_PM_SLEEP
 /*
  * The 'wakeup_count' attribute, along with the functions defined in
@@ -418,6 +440,7 @@ power_attr(wake_unlock);
 
 static struct attribute * g[] = {
 	&state_attr.attr,
+	&suspend_cycle_cnt_attr.attr,
 #ifdef CONFIG_PM_TRACE
 	&pm_trace_attr.attr,
 	&pm_trace_dev_match_attr.attr,

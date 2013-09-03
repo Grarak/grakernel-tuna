@@ -670,6 +670,27 @@ struct twl4030_bci_platform_data {
 	struct cell_config *cell_cfg;
 };
 
+struct twl4030_battery_platform_data {
+	int *battery_tmp_tbl;
+	unsigned int tblsize;
+
+	unsigned long monitoring_interval_seconds;
+};
+
+struct twl4030_charger_platform_data {
+	unsigned long monitor_interval_seconds;
+
+	unsigned int max_charger_current_mA;
+	unsigned int max_charger_voltage_mV;
+	unsigned int termination_current_mA;
+
+	unsigned int max_bat_voltage_mV;
+	unsigned int low_bat_voltage_mV;
+
+	char **supplied_to;
+	size_t num_supplicants;
+};
+
 /* TWL4030_GPIO_MAX (18) GPIOs, with interrupts */
 struct twl4030_gpio_platform_data {
 	int		gpio_base;
@@ -801,6 +822,11 @@ struct twl4030_codec_data {
 	unsigned int check_defaults:1;
 	unsigned int reset_registers:1;
 	unsigned int hs_extmute:1;
+	u16 hs_left_step;
+	u16 hs_right_step;
+	u16 hf_left_step;
+	u16 hf_right_step;
+	u16 ep_step;
 	void (*set_hs_extmute)(int mute);
 };
 
@@ -855,6 +881,9 @@ struct twl4030_platform_data {
 	struct twl4030_usb_data			*usb;
 	struct twl4030_power_data		*power;
 	struct twl4030_audio_data		*audio;
+
+	struct twl4030_charger_platform_data *charger;
+	struct twl4030_battery_platform_data *battery;
 
 	/* Common LDO regulators for TWL4030/TWL6030 */
 	struct regulator_init_data		*vdac;

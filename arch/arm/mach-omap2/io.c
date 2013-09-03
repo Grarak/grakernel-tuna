@@ -228,6 +228,24 @@ static struct map_desc omap44xx_io_desc[] __initdata = {
 		.length		= L4_PER_44XX_SIZE,
 		.type		= OMAP_IO_MAP_TYPE,
 	},
+	{
+		.virtual = OMAP44XX_EMIF1_VIRT,
+		.pfn = __phys_to_pfn(OMAP44XX_EMIF1_PHYS),
+		.length = OMAP44XX_EMIF1_SIZE,
+		.type = OMAP_IO_MAP_TYPE,
+	},
+	{
+		.virtual = OMAP44XX_EMIF2_VIRT,
+		.pfn = __phys_to_pfn(OMAP44XX_EMIF2_PHYS),
+		.length = OMAP44XX_EMIF2_SIZE,
+		.type = OMAP_IO_MAP_TYPE,
+	},
+	{
+		.virtual = OMAP44XX_DMM_VIRT,
+		.pfn = __phys_to_pfn(OMAP44XX_DMM_PHYS),
+		.length = OMAP44XX_DMM_SIZE,
+		.type = OMAP_IO_MAP_TYPE,
+	},
 #ifdef CONFIG_OMAP4_ERRATA_I688
 	{
 		.virtual	= OMAP4_ERRATA_I688_SRAM_VA,

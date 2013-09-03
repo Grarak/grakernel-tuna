@@ -39,3 +39,10 @@ config CASE_TEMP_SENSOR
 	help
 	  Enabling this config will give support for the case
 	  temp sensor for the OMAP platform.
+
+config NOTLE_PCB_SENSOR
+	bool "Notle PCB temp sensor support"
+	depends on THERMAL_FRAMEWORK
+	help
+	  Enabling this config will give support for the pcb
+	  temp sensor for the notle board.

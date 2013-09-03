@@ -278,6 +278,14 @@ obj-$(CONFIG_MACH_OMAP_BLAZE)		+= board-44xx-tablet.o \
 
 obj-$(CONFIG_MACH_OMAP4_PANDA)		+= board-omap4panda.o
 
+obj-$(CONFIG_MACH_NOTLE)		+= board-notle.o \
+					   board-notle-bluetooth.o \
+					   board-notle-wifi.o \
+					   hsmmc.o \
+					   omap_phy_internal.o \
+					   notle-usb-mux.o
+
+
 obj-$(CONFIG_MACH_PCM049)		+= board-omap4pcm049.o
 
 obj-$(CONFIG_MACH_OMAP3517EVM)		+= board-am3517evm.o

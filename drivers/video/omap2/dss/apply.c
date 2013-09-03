@@ -123,6 +123,10 @@ struct mgr_priv_data {
 
 	/* callback data for the last 3 states */
 	struct callback_states cb;
+
+	bool gamma_enable;
+	u32* gamma_table;
+	bool gamma_table_dirty;
 };
 
 static struct {
@@ -1348,6 +1352,13 @@ static void omap_dss_mgr_apply_mgr(struct omap_overlay_manager *mgr)
 
 	mp->user_info_dirty = false;
 	mp->info_dirty = true;
+
+	mp->gamma_table = mp->user_info.gamma_table;
+	mp->gamma_table_dirty = mp->user_info.gamma_table_dirty;
+	if (mp->info.gamma_table_dirty)
+		mp->info.gamma_table_dirty = false;
+	mp->gamma_enable = mp->user_info.gamma_enable;
+
 	mp->info = mp->user_info;
 }
 
@@ -1698,6 +1709,7 @@ static bool get_use_fifo_merge(void)
 int dss_mgr_enable(struct omap_overlay_manager *mgr)
 {
 	struct mgr_priv_data *mp = get_mgr_priv(mgr);
+	struct omap_overlay_manager_info info;
 	unsigned long flags;
 	int r;
 	bool fifo_merge;
@@ -1740,6 +1752,9 @@ int dss_mgr_enable(struct omap_overlay_manager *mgr)
 
 	spin_unlock_irqrestore(&data_lock, flags);
 
+	mgr->get_manager_info(mgr, &info);
+	info.gamma_table_dirty = true;
+	mgr->set_manager_info(mgr, &info);
 	if (!mgr_manual_update(mgr))
 		dispc_mgr_enable(mgr->id, true);
 
@@ -2197,4 +2212,3 @@ err:
 	mutex_unlock(&apply_lock);
 	return r;
 }
-

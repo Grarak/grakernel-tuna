@@ -1,4 +1,5 @@
 obj-$(CONFIG_PANEL_GENERIC_DPI) += panel-generic-dpi.o
+obj-$(CONFIG_PANEL_NOTLE_DPI) += panel-notle-dpi.o
 obj-$(CONFIG_PANEL_DVI) += panel-dvi.o
 obj-$(CONFIG_PANEL_LGPHILIPS_LB035Q02) += panel-lgphilips-lb035q02.o
 obj-$(CONFIG_PANEL_SHARP_LS037V7DW01) += panel-sharp-ls037v7dw01.o

@@ -5,5 +5,6 @@ obj-$(CONFIG_TMP006_SENSOR)	+= tmp006_temp_sensor.o
 obj-$(CONFIG_THERMISTOR_SENSOR)	+= thermistor_sensor.o
 obj-$(CONFIG_OMAP_DIE_TEMP_SENSOR)	+= omap_die_sensor.o
 obj-$(CONFIG_CASE_TEMP_SENSOR)	+= case_temp_sensor.o
+obj-$(CONFIG_NOTLE_PCB_SENSOR)	+= notle_pcb_sensor.o
 
 ccflags-y := -Idrivers/thermal

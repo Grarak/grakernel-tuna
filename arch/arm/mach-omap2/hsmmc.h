@@ -27,6 +27,7 @@ struct omap2_hsmmc_info {
 	char	*name;		/* or NULL for default */
 	struct platform_device *pdev;	/* mmc controller instance */
 	int	ocr_mask;	/* temporary HACK */
+	struct mmc_platform_data *mmc_data;
 	/* built_in: Use this flag to keep power to MMC/SDIO card
 	 * during suspend in case the driver for the card
 	 * (Eg: SDIO/Wifi driver) has not yet been loaded

@@ -18,6 +18,8 @@ struct omap2_mcspi_dev_attr {
 
 struct omap2_mcspi_device_config {
 	unsigned turbo_mode:1;
+	unsigned single_channel:1;
+	unsigned swap_datalines;
 };
 
 #endif

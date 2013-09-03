@@ -23,6 +23,9 @@ struct bq27x00_cooling_actions {
 
 struct bq27x00_platform_data {
 	int	number_actions;
+	int soc_int_irq;
+	int bat_low_irq;
+	int (*translate_temp)(int temperature);
 	struct	bq27x00_cooling_actions cooling_actions[];
 };
 #endif

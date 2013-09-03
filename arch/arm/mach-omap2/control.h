@@ -421,10 +421,16 @@ extern u8 omap_ctrl_readb(u16 offset);
 extern u16 omap_ctrl_readw(u16 offset);
 extern u32 omap_ctrl_readl(u16 offset);
 extern u32 omap4_ctrl_pad_readl(u16 offset);
+extern u8 omap4_ctrl_wk_pad_readb(u16 offset);
+extern u16 omap4_ctrl_wk_pad_readw(u16 offset);
+extern u32 omap4_ctrl_wk_pad_readl(u16 offset);
 extern void omap_ctrl_writeb(u8 val, u16 offset);
 extern void omap_ctrl_writew(u16 val, u16 offset);
 extern void omap_ctrl_writel(u32 val, u16 offset);
 extern void omap4_ctrl_pad_writel(u32 val, u16 offset);
+extern void omap4_ctrl_wk_pad_writeb(u8 val, u16 offset);
+extern void omap4_ctrl_wk_pad_writew(u16 val, u16 offset);
+extern void omap4_ctrl_wk_pad_writel(u32 val, u16 offset);
 
 extern void omap3_save_scratchpad_contents(void);
 extern void omap3_clear_scratchpad_contents(void);

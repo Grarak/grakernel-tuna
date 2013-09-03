@@ -67,9 +67,13 @@
 #define OMAP5_RPROC_CMA_BASE_IPU	(0x95800000)
 #define OMAP5_RPROC_CMA_BASE_DSP	(0x95000000)
 
+#ifdef CONFIG_MACH_NOTLE
+#define OMAP4_RPROC_CMA_BASE_IPU	(0xb5500000)
+#define OMAP4_RPROC_CMA_BASE_DSP	(0x98800000)
+#else
 #define OMAP4_RPROC_CMA_BASE_IPU	(0x99000000)
 #define OMAP4_RPROC_CMA_BASE_DSP	(0x98800000)
-
+#endif
 
 #ifdef CONFIG_OMAP_REMOTEPROC_DSP
 static struct omap_rproc_timers_info dsp_timers[] = {
@@ -126,7 +130,7 @@ static struct omap_rproc_pdata omap4_rproc_data[] = {
 #ifdef CONFIG_OMAP_REMOTEPROC_IPU
 	{
 		.name		= "ipu_c0",
-		.firmware	= "ducati-m3-core0.xem3",
+                .firmware	= "ducati-m3-core0.xem3",
 		.mbox_name	= "mailbox-1",
 		.oh_name	= "ipu_c0",
 		.oh_name_opt	= "ipu_c1",

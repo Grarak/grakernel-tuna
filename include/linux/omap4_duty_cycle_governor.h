@@ -20,6 +20,8 @@
 
 struct pcb_sens {
 	int (*update_temp) (void);
+	bool (*turbo_sprint) (void);
+	int (*debug) (void);
 };
 
 struct duty_cycle_params {
@@ -42,6 +44,7 @@ struct duty_cycle {
 };
 
 void omap4_duty_pcb_section_reg(struct pcb_section *pcb_sect, int sect_size);
+void omap4_duty_turbo_sprint_pcb_section_reg(struct pcb_section *pcb_sect, int sect_size);
 int omap4_duty_pcb_register(struct pcb_sens *tpcb);
 
 #ifdef CONFIG_OMAP4_DUTY_CYCLE_GOVERNOR

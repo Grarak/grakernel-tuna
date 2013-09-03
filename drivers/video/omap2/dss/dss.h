@@ -452,6 +452,7 @@ void dispc_pck_free_enable(bool enable);
 void dispc_set_digit_size(u16 width, u16 height);
 void dispc_enable_fifomerge(bool enable);
 void dispc_enable_gamma_table(bool enable);
+void dispc_set_gamma_table(enum omap_channel channel, u32 *table);
 void dispc_set_loadmode(enum omap_dss_load_mode mode);
 
 bool dispc_lcd_timings_ok(struct omap_video_timings *timings);

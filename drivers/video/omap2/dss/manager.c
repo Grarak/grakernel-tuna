@@ -404,6 +404,105 @@ static ssize_t manager_cpr_coef_store(struct omap_overlay_manager *mgr,
 	return size;
 }
 
+static ssize_t manager_gamma_table_show(struct omap_overlay_manager *mgr,
+		char *buf)
+{
+	struct omap_overlay_manager_info info;
+	u32 *p;
+	size_t left, n;
+	int i;
+
+	left = PAGE_SIZE;
+
+	mgr->get_manager_info(mgr, &info);
+	p = info.gamma_table;
+	for (i = 0; i < OMAP_DSS_GAMMA_TABLE_SIZE; i++) {
+		n = snprintf(buf, left, "0x%08x\n", *p++);
+		buf += n;
+		left -= n;
+	}
+	return PAGE_SIZE - left;
+}
+
+static ssize_t manager_gamma_table_store(struct omap_overlay_manager *mgr,
+		const char *buf, size_t size)
+{
+	struct omap_overlay_manager_info info;
+	u32 entry;
+	char *start, *end;
+	size_t left;
+	int r, index;
+
+	mgr->get_manager_info(mgr, &info);
+
+	// extract the entries
+	start = (char *)buf;
+	left = size;
+	while (left) {
+		entry = simple_strtoul(start, &end, 0);
+		if (end == start)
+			break;
+		left -= ((end - start) + 1);
+		start = end + 1;
+		index = entry >> 24;
+		info.gamma_table[index] = entry;
+	}
+	info.gamma_table_dirty = true;
+
+	r = mgr->set_manager_info(mgr, &info);
+	if (r)
+		return r;
+
+	r = mgr->apply(mgr);
+	if (r)
+		return r;
+
+	return size;
+}
+
+static ssize_t manager_gamma_enable_show(struct omap_overlay_manager *mgr,
+		char *buf)
+{
+	struct omap_overlay_manager_info info;
+	int ret;
+	mgr->get_manager_info(mgr, &info);
+	ret = snprintf(buf, PAGE_SIZE, "%d\n", info.gamma_enable);
+	mgr->set_manager_info(mgr, &info);
+	return ret;
+}
+
+static ssize_t manager_gamma_enable_store(struct omap_overlay_manager *mgr,
+		const char *buf, size_t size)
+{
+	struct omap_overlay_manager_info info;
+	int v;
+	int r;
+	bool enable;
+
+	r = kstrtoint(buf, 0, &v);
+	if (r)
+		return r;
+
+	enable = !!v;
+
+	mgr->get_manager_info(mgr, &info);
+
+	if (info.gamma_enable == enable)
+		return size;
+
+	info.gamma_enable = enable;
+
+	r = mgr->set_manager_info(mgr, &info);
+	if (r)
+		return r;
+
+	r = mgr->apply(mgr);
+	if (r)
+		return r;
+
+	return size;
+}
+
 struct manager_attribute {
 	struct attribute attr;
 	ssize_t (*show)(struct omap_overlay_manager *, char *);
@@ -435,6 +534,12 @@ static MANAGER_ATTR(cpr_enable, S_IRUGO|S_IWUSR,
 static MANAGER_ATTR(cpr_coef, S_IRUGO|S_IWUSR,
 		manager_cpr_coef_show,
 		manager_cpr_coef_store);
+static MANAGER_ATTR(gamma_enable, S_IRUGO|S_IWUSR,
+		manager_gamma_enable_show,
+		manager_gamma_enable_store);
+static MANAGER_ATTR(gamma_table, S_IRUGO|S_IWUSR,
+		manager_gamma_table_show,
+		manager_gamma_table_store);
 
 
 static struct attribute *manager_sysfs_attrs[] = {
@@ -447,6 +552,8 @@ static struct attribute *manager_sysfs_attrs[] = {
 	&manager_attr_alpha_blending_enabled.attr,
 	&manager_attr_cpr_enable.attr,
 	&manager_attr_cpr_coef.attr,
+	&manager_attr_gamma_enable.attr,
+	&manager_attr_gamma_table.attr,
 	NULL
 };
 
@@ -520,6 +627,28 @@ static int dss_mgr_wait_for_vsync(struct omap_overlay_manager *mgr)
 	return r;
 }
 
+static void omap_dss_init_gamma_table(struct omap_overlay_manager *mgr)
+{
+	int i;
+	u32 *p;
+	struct omap_overlay_manager_info info;
+
+	if (mgr != omap_dss_get_overlay_manager(OMAP_DSS_OVL_MGR_LCD2))
+		return;
+
+	p = kzalloc(OMAP_DSS_GAMMA_TABLE_SIZE*sizeof(u32), GFP_KERNEL);
+	BUG_ON(p == NULL);
+
+	mgr->get_manager_info(mgr, &info);
+	info.gamma_table = p;
+	for (i = 0; i < OMAP_DSS_GAMMA_TABLE_SIZE; i++) {
+		*p++ = (i << 24) | (i << 16) | (i <<8) | i;
+	}
+	info.gamma_table_dirty = true;
+	mgr->set_manager_info(mgr, &info);
+}
+
+
 int dss_init_overlay_managers(struct platform_device *pdev)
 {
 	int i, r;
@@ -567,6 +696,8 @@ int dss_init_overlay_managers(struct platform_device *pdev)
 
 		INIT_LIST_HEAD(&mgr->overlays);
 
+		omap_dss_init_gamma_table(mgr);
+
 		r = kobject_init_and_add(&mgr->kobj, &manager_ktype,
 				&pdev->dev.kobj, "manager%d", i);
 
@@ -583,9 +714,12 @@ void dss_uninit_overlay_managers(struct platform_device *pdev)
 
 	for (i = 0; i < num_managers; ++i) {
 		struct omap_overlay_manager *mgr = &managers[i];
-
+		struct omap_overlay_manager_info info;
 		kobject_del(&mgr->kobj);
 		kobject_put(&mgr->kobj);
+		mgr->get_manager_info(mgr, &info);
+		if (info.gamma_table)
+			kfree(info.gamma_table);
 	}
 
 	kfree(managers);
