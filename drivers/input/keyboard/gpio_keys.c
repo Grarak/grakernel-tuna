@@ -31,7 +31,7 @@
 #include <linux/spinlock.h>
 
 struct gpio_button_data {
-	const struct gpio_keys_button *button;
+	struct gpio_keys_button *button;
 	struct input_dev *input;
 	struct timer_list timer;
 	struct work_struct work;
@@ -50,6 +50,14 @@ struct gpio_keys_drvdata {
 	void (*disable)(struct device *dev);
 	struct gpio_button_data data[0];
 };
+
+typedef enum {
+	GPIO_KEYS_PROBE = 0,
+	GPIO_KEYS_WORK = 1,
+	GPIO_KEYS_RESUME = 2
+} gpio_key_caller_t;
+
+extern unsigned int get_suspend_cnt(void);
 
 /*
  * SYSFS interface for enabling/disabling keys and switches:
@@ -324,12 +332,33 @@ static struct attribute_group gpio_keys_attr_group = {
 	.attrs = gpio_keys_attrs,
 };
 
-static void gpio_keys_gpio_report_event(struct gpio_button_data *bdata)
+static int from_suspend_active(const struct gpio_keys_button* button) {
+	if (button->goog.last_suspend_cnt != get_suspend_cnt()) {
+		return 1;
+	}
+	return 0;
+}
+
+static void gpio_keys_gpio_report_event(struct gpio_button_data *bdata, gpio_key_caller_t caller)
 {
-	const struct gpio_keys_button *button = bdata->button;
+	struct gpio_keys_button *button = bdata->button;
 	struct input_dev *input = bdata->input;
+	struct timespec ts, ts_delta;
 	unsigned int type = button->type ?: EV_KEY;
 	int state = (gpio_get_value_cansleep(button->gpio) ? 1 : 0) ^ button->active_low;
+
+	if (button->goog.prev_state == state && caller == GPIO_KEYS_WORK
+		&& from_suspend_active(button) && !button->goog.synth_sent) {
+		state = !state;
+		button->goog.synth_sent = 1;
+	}
+
+	if (caller == GPIO_KEYS_WORK) {
+		read_persistent_clock(&ts);
+		ts_delta = timespec_sub(ts, button->goog.ts);
+		dev_dbg(&input->dev, "Camera button time isr to input handling :%Ld ns\n",
+			timespec_to_ns(&ts_delta));
+	}
 
 	if (type == EV_ABS) {
 		if (state)
@@ -338,6 +367,13 @@ static void gpio_keys_gpio_report_event(struct gpio_button_data *bdata)
 		input_event(input, type, button->code, !!state);
 	}
 	input_sync(input);
+
+	button->goog.prev_state = state;
+
+	dev_info(&input->dev, "Camera button caller:::%d %s %s\n",
+		caller,
+		((state) ? "pressed" : "released"),
+		((button->goog.synth_sent) ? "synthesized" : "polled"));
 }
 
 static void gpio_keys_gpio_work_func(struct work_struct *work)
@@ -345,7 +381,7 @@ static void gpio_keys_gpio_work_func(struct work_struct *work)
 	struct gpio_button_data *bdata =
 		container_of(work, struct gpio_button_data, work);
 
-	gpio_keys_gpio_report_event(bdata);
+	gpio_keys_gpio_report_event(bdata, GPIO_KEYS_WORK);
 }
 
 static void gpio_keys_gpio_timer(unsigned long _data)
@@ -358,10 +394,12 @@ static void gpio_keys_gpio_timer(unsigned long _data)
 static irqreturn_t gpio_keys_gpio_isr(int irq, void *dev_id)
 {
 	struct gpio_button_data *bdata = dev_id;
+	struct gpio_keys_button *button = bdata->button;
 
 	BUG_ON(irq != bdata->irq);
 
-	if (bdata->timer_debounce)
+	read_persistent_clock(&button->goog.ts);
+	if (bdata->timer_debounce && !from_suspend_active(button))
 		mod_timer(&bdata->timer,
 			jiffies + msecs_to_jiffies(bdata->timer_debounce));
 	else
@@ -420,7 +458,7 @@ out:
 static int __devinit gpio_keys_setup_key(struct platform_device *pdev,
 					 struct input_dev *input,
 					 struct gpio_button_data *bdata,
-					 const struct gpio_keys_button *button)
+					 struct gpio_keys_button *button)
 {
 	const char *desc = button->desc ? button->desc : "gpio_keys";
 	struct device *dev = &pdev->dev;
@@ -511,6 +549,7 @@ static int __devinit gpio_keys_setup_key(struct platform_device *pdev,
 		goto fail;
 	}
 
+	button->goog.prev_state = -1;
 	return 0;
 
 fail:
@@ -696,7 +735,7 @@ static int __devinit gpio_keys_probe(struct platform_device *pdev)
 		__set_bit(EV_REP, input->evbit);
 
 	for (i = 0; i < pdata->nbuttons; i++) {
-		const struct gpio_keys_button *button = &pdata->buttons[i];
+		struct gpio_keys_button *button = &pdata->buttons[i];
 		struct gpio_button_data *bdata = &ddata->data[i];
 
 		error = gpio_keys_setup_key(pdev, input, bdata, button);
@@ -714,6 +753,14 @@ static int __devinit gpio_keys_probe(struct platform_device *pdev)
 		goto fail2;
 	}
 
+	/* If any single key button can wake the device, we need to inform
+	   the input subsystem not to mess with our key state during a suspend
+	   and resume cycle. */
+	if (wakeup) {
+		device_set_wakeup_capable(&input->dev, true);
+	}
+
+
 	error = input_register_device(input);
 	if (error) {
 		dev_err(dev, "Unable to register input device, error: %d\n",
@@ -725,7 +772,7 @@ static int __devinit gpio_keys_probe(struct platform_device *pdev)
 	for (i = 0; i < pdata->nbuttons; i++) {
 		struct gpio_button_data *bdata = &ddata->data[i];
 		if (gpio_is_valid(bdata->button->gpio))
-			gpio_keys_gpio_report_event(bdata);
+                  gpio_keys_gpio_report_event(bdata, GPIO_KEYS_PROBE);
 	}
 	input_sync(input);
 
@@ -787,8 +834,10 @@ static int gpio_keys_suspend(struct device *dev)
 	if (device_may_wakeup(dev)) {
 		for (i = 0; i < ddata->n_buttons; i++) {
 			struct gpio_button_data *bdata = &ddata->data[i];
-			if (bdata->button->wakeup)
+			if (bdata->button->wakeup) {
 				enable_irq_wake(bdata->irq);
+				bdata->button->goog.last_suspend_cnt = get_suspend_cnt();
+			}
 		}
 	}
 
@@ -802,11 +851,14 @@ static int gpio_keys_resume(struct device *dev)
 
 	for (i = 0; i < ddata->n_buttons; i++) {
 		struct gpio_button_data *bdata = &ddata->data[i];
-		if (bdata->button->wakeup && device_may_wakeup(dev))
+		if (bdata->button->wakeup && device_may_wakeup(dev)) {
 			disable_irq_wake(bdata->irq);
+			bdata->button->goog.last_suspend_cnt = get_suspend_cnt();
+			bdata->button->goog.synth_sent = 0;
+                }
 
 		if (gpio_is_valid(bdata->button->gpio))
-			gpio_keys_gpio_report_event(bdata);
+			gpio_keys_gpio_report_event(bdata, GPIO_KEYS_RESUME);
 	}
 	input_sync(ddata->input);
 
