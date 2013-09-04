@@ -48,6 +48,10 @@
 #include "omap-dmic.h"
 #include "../codecs/twl6040.h"
 
+#ifdef CONFIG_MACH_NOTLE
+extern void notle_hs_jack_detect(struct snd_soc_codec *codec, struct snd_soc_jack *jack, int report);
+#endif
+
 struct omap_abe_data {
 	int twl6040_power_mode;
 	int mcbsp_cfg;
@@ -597,6 +601,10 @@ static int omap_abe_twl6040_init(struct snd_soc_pcm_runtime *rtd)
 			machine_is_omap5_sevm() ||
 			machine_is_omap5_panda())
 			twl6040_hs_jack_detect(codec, &hs_jack, SND_JACK_HEADSET);
+#ifdef CONFIG_MACH_NOTLE
+		else if (machine_is_notle())
+			notle_hs_jack_detect(codec, &hs_jack, SND_JACK_HEADSET);
+#endif
 		else
 			snd_soc_jack_report(&hs_jack, SND_JACK_HEADSET, SND_JACK_HEADSET);
 	}

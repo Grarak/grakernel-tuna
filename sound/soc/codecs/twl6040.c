@@ -1408,6 +1408,7 @@ static int twl6040_probe(struct snd_soc_codec *codec)
 		}
 	}
 
+#ifndef CONFIG_MACH_NOTLE
 	jack = &priv->hs_jack;
 	jack->sdev.name = "h2w";
 	ret = switch_dev_register(&jack->sdev);
@@ -1415,6 +1416,7 @@ static int twl6040_probe(struct snd_soc_codec *codec)
 		dev_err(codec->dev, "error registering switch device %d\n", ret);
 		goto sdev_err;
 	}
+#endif
 
 	ret = request_threaded_irq(priv->plug_irq, NULL, twl6040_audio_handler,
 				   IRQF_NO_SUSPEND, "twl6040_irq_plug", codec);

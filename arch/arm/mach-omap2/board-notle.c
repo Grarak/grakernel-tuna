@@ -40,6 +40,7 @@
 #include <plat/mcspi.h>
 #include <linux/mfd/twl6040.h>
 #include <linux/gps_elton.h>
+#include <linux/platform_data/omap-abe-twl6040.h>
 
 #ifdef CONFIG_INPUT_LTR506ALS
 #include <linux/i2c/ltr506als.h>
@@ -837,6 +838,7 @@ static struct regulator_consumer_supply notle_cam2_supply[] = {
   {
     .supply = "cam2pwr",
   },
+  REGULATOR_SUPPLY("av-switch", "omap-abe-twl6040"),
 };
 
 // Voltage for sensors (mag, acc, gyro, light sensor, camera)
@@ -856,7 +858,7 @@ static struct regulator_init_data notle_vaux2 = {
 		},
 		.initial_state          = PM_SUSPEND_MEM,
 	},
-        .num_consumer_supplies = 1,
+        .num_consumer_supplies = 2,
         .consumer_supplies = notle_cam2_supply,
 };
 
@@ -1239,12 +1241,46 @@ static struct platform_device gps_elton_platform_device = {
 		.platform_data	= &gps_elton_platform_data,
 	},
 };
+static struct platform_device notle_spdif_dit_codec = {
+	.name           = "spdif-dit",
+	.id             = -1,
+};
+static struct platform_device notle_dmic_codec = {
+	.name	= "dmic-codec",
+	.id	= -1,
+};
+
+static struct omap_abe_twl6040_data notle_abe_audio_data = {
+	.has_hs		= ABE_TWL6040_LEFT | ABE_TWL6040_RIGHT,
+	.has_hf		= ABE_TWL6040_LEFT | ABE_TWL6040_RIGHT,
+	.has_aux	= ABE_TWL6040_LEFT | ABE_TWL6040_RIGHT,
+	.has_afm	= ABE_TWL6040_LEFT | ABE_TWL6040_RIGHT,
+	.jack_detection	= 1,
+	.mclk_freq	= 38400000,
+	.card_name = "Notle",
+	.has_hsmic = 0,
+	.has_dmic = 1,
+	.has_abe = 1,
+	.has_ep = 1,
+
+};
+
+static struct platform_device notle_abe_audio = {
+	.name		= "omap-abe-twl6040",
+	.id		= -1,
+	.dev = {
+		.platform_data = &notle_abe_audio_data,
+	},
+};
 
 static struct platform_device *notle_devices[] __initdata = {
         &leds_gpio,
         &gpio_keys,
         &bcm4330_bluetooth_device,
         &gps_elton_platform_device,
+        &notle_dmic_codec,
+        &notle_spdif_dit_codec,
+        &notle_abe_audio,
 };
 
 static struct platform_device notle_pcb_temp_sensor = {
@@ -1865,6 +1901,10 @@ static int __init notle_i2c_init(void)
 		pr_err("Unrecognized Notle version: %i\n", NOTLE_VERSION);
 		return -1;
 	}
+
+	omap4_pmic_get_config(&notle_twldata, 0,
+		TWL_COMMON_REGULATOR_V1V8 |
+		TWL_COMMON_REGULATOR_V2V1);
 
 	omap4_pmic_init("twl6030", &notle_twldata, &twl6040_data, OMAP44XX_IRQ_SYS_2N);
 	notle_i2c_irq_fixup();

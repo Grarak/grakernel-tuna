@@ -213,9 +213,13 @@ static int twl6030_usb_ldo_init(struct twl6030_usb *twl)
 	 */
 	twl6030_writeb(twl, TWL_MODULE_USB, 0x14, USB_ID_CTRL_SET);
 
+#ifndef CONFIG_MACH_NOTLE
 	/* Disable LDO before disabling his input supply */
 	regulator_force_disable(twl->usb3v3);
 	twl6030_enable_ldo_input_supply(twl, false);
+#else
+	twl6030_enable_ldo_input_supply(twl, true);
+#endif
 
 	return 0;
 }
@@ -291,9 +295,11 @@ static irqreturn_t twl6030_usb_irq(int irq, void *_twl)
 							     event,
 							     &charger_type);
 				if (twl->asleep) {
+#ifndef CONFIG_MACH_NOTLE
 					regulator_disable(twl->usb3v3);
 					twl6030_enable_ldo_input_supply(twl,
 									false);
+#endif
 					twl->asleep = 0;
 				}
 			}
