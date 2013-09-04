@@ -78,6 +78,7 @@
 #include <plat/vram.h>
 #include <plat/omap-pm.h>
 #include <plat/omap-serial.h>
+#include <plat/omap_apps_brd_id.h>
 
 #include <linux/power/bq27x00_battery.h>
 
@@ -2148,7 +2149,7 @@ static void __init notle_init(void)
         if (omap_rev() == OMAP4430_REV_ES1_0)
                 package = OMAP_PACKAGE_CBL;
         notle_version_init();
-
+        omap_create_board_props();
         if (!notle_version_supported()) {
               omap_emif_set_device_details(1, &lpddr2_elpida_2G_S4_x2_info, lpddr2_elpida_2G_S4_timings, ARRAY_SIZE(lpddr2_elpida_2G_S4_timings),
                                            &lpddr2_elpida_S4_min_tck, NULL);
