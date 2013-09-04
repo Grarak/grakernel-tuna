@@ -96,24 +96,9 @@ enum bq27x00_reg_index {
 	BQ27x00_REG_TRUEFCC,
 	BQ27x00_REG_TRUESOC,
 /* TI L1 firmware (v6.03) extra registers */
-	BQ27x00_REG_DELTA_V,
-	BQ27x00_REG_QMAX,
-	BQ27x00_REG_QPASSED,
-	BQ27x00_REG_DOD0,
-	BQ27x00_REG_QSTART,
-	BQ27x00_REG_DODFINAL,
+	BQ27x00_REG_MAX_CURRENT,
 	BQ27x00_REG_QPASSED_HIRES_INT,
 	BQ27x00_REG_QPASSED_HIRES_FRACTION,
-	BQ27x00_REG_MAX_CURRENT,
-
-	BQ27x00_REG_MAX_DOD_DIFF,
-	BQ27x00_REG_AMBIENT_TEMP,
-	BQ27x00_REG_REGR_DOD,
-	BQ27x00_REG_REGR_RES,
-	BQ27x00_REG_RNEW,
-	BQ27x00_REG_DIFF,
-	BQ27x00_REG_SLEEPTIME,
-	BQ27x00_REG_SIM_TEMP,
 };
 
 /* TI G3 Firmware (v3.24) */
@@ -143,20 +128,6 @@ static u8 bq27x00_fw_g3_regs[] = {
 	0x28,
 	0x2A,
 	0x3A,
-	0xFF,
-	0xFF,
-	0xFF,
-	0xFF,
-	0xFF,
-	0xFF,
-	0xFF,
-	0xFF,
-	0xFF,
-	0xFF,
-	0xFF,
-	0xFF,
-	0xFF,
-	0xFF,
 	0xFF,
 	0xFF,
 	0xFF,
@@ -199,25 +170,10 @@ static u8 bq27x00_fw_l1_regs[] = {
 	0x6C,
 	0x70,
 	0x74,
-/* TI L1 firmware (v6.03) extra registers */
-	0x30, /* BQ27x00_REG_DELTA_V */
-	0x62, /* BQ27x00_REG_QMAX */
-	0x64, /* BQ27x00_REG_QPASSED */
-	0x66, /* BQ27x00_REG_DOD0 */
-	0x68, /* BQ27x00_REG_QSTART */
-	0x6A, /* BQ27x00_REG_DODFINAL */
+/* TI L1 firmware (v6.04) extra registers */
+	0x76, /* BQ27x00_REG_MAX_CURRENT */
 	0x24, /* BQ27x00_REG_QPASSED_HIRES_INT */
 	0x27, /* BQ27x00_REG_QPASSED_HIRES_FRACTION */
-	0x76, /* BQ27x00_REG_MAX_CURRENT */
-
-	0x2C, /* BQ27x00_REG_MAX_DOD_DIFF */
-	0x2E, /* BQ27x00_REG_AMBIENT_TEMP */
-	0x32, /* BQ27x00_REG_REGR_DOD */
-	0x34, /* BQ27x00_REG_REGR_RES */
-	0x36, /* BQ27x00_REG_RNEW */
-	0x38, /* BQ27x00_REG_DIFF */
-	0x3A, /* BQ27x00_REG_SLEEPTIME */
-	0x3C, /* BQ27x00_REG_SIM_TEMP */
 
 };
 
@@ -296,7 +252,7 @@ struct bq27x00_reg_cache {
 	short regr_res;
 	short rnew;
 	short dod_diff;
-	short sleeptime;
+	unsigned short sleeptime;
 	short sim_temp;
 
 };
@@ -542,8 +498,9 @@ static void bq27x00_update(struct bq27x00_device_info *di)
 {
 	struct bq27x00_reg_cache cache = {0, };
 	bool is_bq27500 = di->chip == BQ27500;
-	unsigned char q_data[10];
-	size_t q_size = 10;
+	unsigned char block_data[26];
+	unsigned char block_addr;
+	int block_len;
 	struct timespec ts;
 
 	cache.flags = bq27x00_read(di, BQ27x00_REG_FLAGS, false);
@@ -574,36 +531,39 @@ static void bq27x00_update(struct bq27x00_device_info *di)
 		cache.true_fcc = bq27x00_read(di, BQ27x00_REG_TRUEFCC, false);
 		cache.true_soc = bq27x00_read(di, BQ27x00_REG_TRUESOC, false);
 
+		block_addr = 0x61;
+		block_len  = 11;
+		if (bq27x00_read_block_i2c(di, block_addr, block_data, block_len) < 0) {
+			dev_err(di->dev,
+				"error block reading debug registers @ 0x%x\n",block_addr);
+		} else {
+			cache.q_max = (short) get_unaligned_le16(block_data+1);
+			cache.q_passed = (short) get_unaligned_le16(block_data+3);
+			cache.DOD0 = get_unaligned_le16(block_data+5);
+			cache.q_start = (short) get_unaligned_le16(block_data+7);
+			cache.DODfinal = get_unaligned_le16(block_data+9);
+		}
 
 		if ( di->fw_ver >= L1_604_FW_VERSION ) {
-			cache.delta_v = bq27x00_read(di, BQ27x00_REG_DELTA_V, false);
-			cache.q_max = bq27x00_read(di, BQ27x00_REG_QMAX, false);
-			cache.q_passed = bq27x00_read(di, BQ27x00_REG_QPASSED, false);
-			cache.DOD0 = bq27x00_read(di, BQ27x00_REG_DOD0, false);
-			cache.q_start = bq27x00_read(di, BQ27x00_REG_QSTART, false);
-			cache.DODfinal = bq27x00_read(di, BQ27x00_REG_DODFINAL, false);
-			cache.q_passed_hires_int = (unsigned short)
-				bq27x00_read(di, BQ27x00_REG_QPASSED_HIRES_INT, false);
-			cache.q_passed_hires_fraction = (unsigned short)
-				bq27x00_read(di, BQ27x00_REG_QPASSED_HIRES_FRACTION, false);
 			cache.max_current = bq27x00_read(di, BQ27x00_REG_MAX_CURRENT, false);
 
-			cache.max_dod_diff = bq27x00_read(di, BQ27x00_REG_MAX_DOD_DIFF, false);
-			cache.ambient_temp = bq27x00_read(di, BQ27x00_REG_AMBIENT_TEMP, false);
-			cache.regr_dod = bq27x00_read(di, BQ27x00_REG_REGR_DOD, false);
-			cache.regr_res = bq27x00_read(di,  BQ27x00_REG_REGR_RES, false);
-			cache.rnew = bq27x00_read(di, BQ27x00_REG_RNEW, false);
-			cache.dod_diff = bq27x00_read(di, BQ27x00_REG_DIFF, false);
-			cache.sleeptime = bq27x00_read(di, BQ27x00_REG_DIFF, false);
-			cache.sim_temp = bq27x00_read(di, BQ27x00_REG_SIM_TEMP, false);
-		} else {
-			if (bq27x00_read_block_i2c(di, 0x61, q_data, q_size) < 0) {
-				dev_err(di->dev, "error block reading debug registers\n");
+			block_addr = 0x24;
+			block_len  = 26;
+			if (bq27x00_read_block_i2c(di, block_addr, block_data, block_len) < 0) {
+				dev_err(di->dev,
+					"error block reading debug registers @ 0x%x\n",block_addr);
 			} else {
-				cache.q_max = (short)((q_data[2] << 8) + q_data[1]);
-				cache.q_passed = (short)((q_data[4] << 8) + q_data[3]);
-				cache.DOD0 = (unsigned short)((q_data[6] << 8) + q_data[5]);
-				cache.q_start = (short)((q_data[8] << 8) + q_data[7]);
+				cache.q_passed_hires_int = get_unaligned_le16(block_data);
+				cache.q_passed_hires_fraction = get_unaligned_le16(block_data+3);
+				cache.max_dod_diff = (short) get_unaligned_le16(block_data+8);
+				cache.ambient_temp = (short) get_unaligned_le16(block_data+10);
+				cache.delta_v = (short) get_unaligned_le16(block_data+12);
+				cache.regr_dod = get_unaligned_le16(block_data+14);
+				cache.regr_res = (short) get_unaligned_le16(block_data+16);
+				cache.rnew = (short) get_unaligned_le16(block_data+18);
+				cache.dod_diff = (short) get_unaligned_le16(block_data+20);
+				cache.sleeptime = get_unaligned_le16(block_data+22);
+				cache.sim_temp = (short) get_unaligned_le16(block_data+24);
 			}
 		}
 
@@ -656,7 +616,7 @@ static void bq27x00_update(struct bq27x00_device_info *di)
 		/* For Version 0x604, there is some extra info */
 		if ( di->fw_ver >= L1_604_FW_VERSION ) {
 			scnprintf(dr_buf+count, sizeof(dr_buf)-count,
-				",%d,%u,%d,0x%04x,0x%04x,%d,%d,%u,%d,%d,%d,%d,%d",
+				",%d,%u,%u,0x%04x,0x%04x,%d,%d,%u,%d,%d,%d,%u,%d",
 				cache.delta_v,
 				cache.DODfinal,
 				cache.max_current,
@@ -711,7 +671,7 @@ static void bq27x00_update(struct bq27x00_device_info *di)
 			if ( di->fw_ver >= L1_604_FW_VERSION ) {
 				scnprintf(di->partial_df.data_ram+count,
 					sizeof(di->partial_df.data_ram)-count,
-					" %d %u %d 0x%04x 0x%04x %d %d %u %d %d %d %d %d",
+					" %d %u %u 0x%04x 0x%04x %d %d %u %d %d %d %u %d",
 					cache.delta_v,
 					cache.DODfinal,
 					cache.max_current,
@@ -936,7 +896,7 @@ static int bq27x00_battery_qpassed(struct bq27x00_device_info *di,
 	 * Even though we are only interested 2 registers.
 	 */
 	bq27x00_read_block_i2c(di, 0x61, q_data, q_size);
-	val->intval = (int)((s16)((q_data[4] << 8) | q_data[3]));
+	val->intval = (int) get_unaligned_le16(q_data+3);
 
 	return 0;
 }
