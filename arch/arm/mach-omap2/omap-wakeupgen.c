@@ -450,6 +450,8 @@ bool omap_wakeupgen_check_interrupts(char *report_string)
 	u32 gica, wakea_c0, wakea_c1;
 	int ret = false;
 
+	extern void omap_board_irq_event(int index, const char *name);
+
 	for (i = 0; i < spi_irq_banks - 1; i++) {
 		gica = gic_readl(GIC_DIST_PENDING_SET, i + 1);
 
@@ -506,11 +508,13 @@ bool omap_wakeupgen_check_interrupts(char *report_string)
 				if (desc && desc->action &&
 				    desc->action->name) {
 					name = desc->action->name;
+					omap_board_irq_event(irq, desc->action->name);
 				} else if (irq == OMAP44XX_IRQ_PRCM) {
 					name = NULL;
 					print_prcm_wakeirq(irq, report_string);
 				} else {
 					name = "unknown";
+					omap_board_irq_event(irq, NULL);
 				}
 
 				if (name)
