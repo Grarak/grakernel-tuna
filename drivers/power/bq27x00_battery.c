@@ -282,10 +282,10 @@ struct bq27x00_reg_cache {
 	int current_now;
 	short q_max;
 	short q_passed;
-	short DOD0;
+	unsigned short DOD0;
 	short q_start;
 	struct timespec timestamp;
-	short DODfinal;
+	unsigned short DODfinal;
 	short delta_v;
 	unsigned short max_current;
 	unsigned short q_passed_hires_int;
@@ -579,7 +579,7 @@ static void bq27x00_update(struct bq27x00_device_info *di)
 			cache.delta_v = bq27x00_read(di, BQ27x00_REG_DELTA_V, false);
 			cache.q_max = bq27x00_read(di, BQ27x00_REG_QMAX, false);
 			cache.q_passed = bq27x00_read(di, BQ27x00_REG_QPASSED, false);
-			cache.DOD0 =bq27x00_read(di, BQ27x00_REG_DOD0, false);
+			cache.DOD0 = bq27x00_read(di, BQ27x00_REG_DOD0, false);
 			cache.q_start = bq27x00_read(di, BQ27x00_REG_QSTART, false);
 			cache.DODfinal = bq27x00_read(di, BQ27x00_REG_DODFINAL, false);
 			cache.q_passed_hires_int = (unsigned short)
@@ -602,7 +602,7 @@ static void bq27x00_update(struct bq27x00_device_info *di)
 			} else {
 				cache.q_max = (short)((q_data[2] << 8) + q_data[1]);
 				cache.q_passed = (short)((q_data[4] << 8) + q_data[3]);
-				cache.DOD0 = (short)((q_data[6] << 8) + q_data[5]);
+				cache.DOD0 = (unsigned short)((q_data[6] << 8) + q_data[5]);
 				cache.q_start = (short)((q_data[8] << 8) + q_data[7]);
 			}
 		}
@@ -626,7 +626,7 @@ static void bq27x00_update(struct bq27x00_device_info *di)
 		count = scnprintf(dr_buf,sizeof(dr_buf),
 		       "bq27x00 Ex DR: %ld.%ld,"
 		       "0x%04x,%d,%d,0x%04x,%d,%d,%d,%d,%d,%d%%,"
-		       "0x%02x,%d,%d%%,%d,%d,%d,%d,%d,%d%%,%d,%d,%d,%d",
+		       "0x%02x,%d,%d%%,%d,%d,%d,%d,%d,%d%%,%d,%d,%u,%d",
 		       cache.timestamp.tv_sec,
 		       cache.timestamp.tv_nsec/100000000,
 		       cache.control,
@@ -656,7 +656,7 @@ static void bq27x00_update(struct bq27x00_device_info *di)
 		/* For Version 0x604, there is some extra info */
 		if ( di->fw_ver >= L1_604_FW_VERSION ) {
 			scnprintf(dr_buf+count, sizeof(dr_buf)-count,
-				",%d,%d,%d,0x%04x,0x%04x,%d,%d,%u,%d,%d,%d,%d,%d",
+				",%d,%u,%d,0x%04x,0x%04x,%d,%d,%u,%d,%d,%d,%d,%d",
 				cache.delta_v,
 				cache.DODfinal,
 				cache.max_current,
@@ -683,7 +683,7 @@ static void bq27x00_update(struct bq27x00_device_info *di)
 			count = scnprintf(di->partial_df.data_ram,
 				sizeof(di->partial_df.data_ram),
 				"0x%04x %d %d 0x%04x %d %d %d %d %d %d "
-				"0x%02x %d %d %d %d %d %d %d %d %d %d %d %d",
+				"0x%02x %d %d %d %d %d %d %d %d %d %d %u %d",
 				cache.control,
 				cache.temperature-2732,
 				cache.voltage,
@@ -711,7 +711,7 @@ static void bq27x00_update(struct bq27x00_device_info *di)
 			if ( di->fw_ver >= L1_604_FW_VERSION ) {
 				scnprintf(di->partial_df.data_ram+count,
 					sizeof(di->partial_df.data_ram)-count,
-					" %d %d %d 0x%04x 0x%04x %d %d %u %d %d %d %d %d",
+					" %d %u %d 0x%04x 0x%04x %d %d %u %d %d %d %d %d",
 					cache.delta_v,
 					cache.DODfinal,
 					cache.max_current,
@@ -1785,6 +1785,61 @@ static ssize_t show_qpassed(struct device *dev,
 	return count;
 }
 
+static ssize_t show_hires_qpassed(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct bq27x00_device_info *di = dev_get_drvdata(dev);
+	int count;
+	int rc;
+	unsigned short i, f;
+
+	mutex_lock(&di->lock);
+	rc = bq27x00_battery_hires_qpassed(di, &i, &f);
+	if (rc == -1) {
+		count = sprintf(buf, "error\n");
+	} else {
+		count = sprintf(buf, "%ld.%ld,%04x,%04x\n",
+				di->cache.timestamp.tv_sec,
+				di->cache.timestamp.tv_nsec/100000000,
+				i,f);
+	}
+	mutex_unlock(&di->lock);
+	return count;
+}
+
+static ssize_t show_battery_details(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct bq27x00_device_info *di = dev_get_drvdata(dev);
+	int count;
+	unsigned short DOD0;
+	short q_max;
+	short q_passed;
+	int DODfinal;
+	int true_fcc;
+	int true_cap;
+	struct timespec timestamp;
+
+	/* Read a bunch of data from the cache */
+	mutex_lock(&di->lock);
+	timestamp = di->cache.timestamp;
+	DOD0 = di->cache.DOD0;
+	DODfinal = di->cache.DODfinal;
+	q_max = di->cache.q_max;
+	q_passed = di->cache.q_passed;
+	true_fcc = di->cache.true_fcc;
+	true_cap = di->cache.true_cap;
+	mutex_unlock(&di->lock);
+
+	count = sprintf(buf, "%ld.%ld,%u,%u,%d,%d,%d,%d\n",
+			timestamp.tv_sec,
+			timestamp.tv_nsec/100000000,
+			DOD0, DODfinal, q_max, q_passed,
+			true_fcc, true_cap);
+	return count;
+}
+
+
 static ssize_t show_debug_enable(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
@@ -1819,6 +1874,8 @@ static DEVICE_ATTR(df_version, S_IRUGO, show_dataflash_version, NULL);
 static DEVICE_ATTR(device_type, S_IRUGO, show_device_type, NULL);
 static DEVICE_ATTR(reset, S_IRUGO, show_reset, NULL);
 static DEVICE_ATTR(qpassed, S_IRUGO, show_qpassed, NULL);
+static DEVICE_ATTR(qpassed_hires, S_IRUGO, show_hires_qpassed, NULL);
+static DEVICE_ATTR(battery_details, S_IRUGO, show_battery_details, NULL);
 static DEVICE_ATTR(debug_enable, S_IWUSR|S_IRUGO, show_debug_enable, set_debug_enable);
 
 static struct attribute *bq27x00_attributes[] = {
@@ -1829,6 +1886,8 @@ static struct attribute *bq27x00_attributes[] = {
 	&dev_attr_device_type.attr,
 	&dev_attr_reset.attr,
 	&dev_attr_qpassed.attr,
+	&dev_attr_qpassed_hires.attr,
+	&dev_attr_battery_details.attr,
 	&dev_attr_debug_enable.attr,
 	NULL
 };
