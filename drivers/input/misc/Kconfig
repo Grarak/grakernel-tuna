@@ -711,4 +711,18 @@ config INPUT_AK8975
 	help
 	  If you say yes here you get support for AK8975 Digital Compass.
 
+config INPUT_GLASSHUB
+	bool "Glass Low Power Sensor Hub Driver"
+	depends on I2C && SYSFS
+	help
+	  Say Y here if you want to use the Glass low-power sensor
+	  hub driver through the I2C interface.
+
+config INPUT_LTR506ALS
+	tristate "Lite-On ambient light sensor driver"
+	depends on INPUT_POLLDEV
+	help
+	  This driver implements the i2c communication to the ambient
+	  light sensor driver.
+
 endif

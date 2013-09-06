@@ -129,3 +129,33 @@ int __init omap_init_clocksource_32k(void)
 	}
 	return 0;
 }
+
+#ifdef CONFIG_MACH_NOTLE
+static u64 accumulated_cycles = 0;
+static cycles_t last_clk_cycles = 0;
+static DEFINE_SPINLOCK(read_robust_clock_lock);
+
+u64 read_robust_clock(void)
+{
+	u64 nsecs;
+	cycles_t cycles;
+	unsigned long flags;
+
+	spin_lock_irqsave(&read_robust_clock_lock, flags);
+
+	cycles = timer_32k_base ? __raw_readl(timer_32k_base) : 0;
+
+	if (cycles < last_clk_cycles)  {
+		accumulated_cycles += cycles + (0xFFFFFFFFu - last_clk_cycles);
+	} else {
+		accumulated_cycles += (cycles - last_clk_cycles);
+	}
+	nsecs = ((u64) accumulated_cycles * NSEC_PER_SEC) >> 15;
+
+	last_clk_cycles = cycles;
+
+	spin_unlock_irqrestore(&read_robust_clock_lock, flags);
+
+	return nsecs;
+}
+#endif
