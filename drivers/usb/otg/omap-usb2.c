@@ -204,6 +204,8 @@ static int __devinit omap_usb2_probe(struct platform_device *pdev)
 	if (!IS_ERR(optclk))
 		phy->optclk = optclk;
 
+	ATOMIC_INIT_NOTIFIER_HEAD(&phy->phy.notifier);
+
 	usb_add_phy(&phy->phy, USB_PHY_TYPE_USB2);
 
 	platform_set_drvdata(pdev, phy);

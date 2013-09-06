@@ -1555,6 +1555,8 @@ static int __init msm_otg_probe(struct platform_device *pdev)
 	phy->otg->set_host = msm_otg_set_host;
 	phy->otg->set_peripheral = msm_otg_set_peripheral;
 
+	ATOMIC_INIT_NOTIFIER_HEAD(&motg->phy.notifier);
+
 	ret = usb_add_phy(&motg->phy, USB_PHY_TYPE_USB2);
 	if (ret) {
 		dev_err(&pdev->dev, "usb_set_transceiver failed\n");
