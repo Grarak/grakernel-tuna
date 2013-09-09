@@ -306,6 +306,9 @@ struct twl6030_charger_device_info {
 
 	unsigned int charger_incurrent_mA;
 	unsigned int charger_outcurrent_mA;
+	unsigned int charger_voltage_mV;
+	unsigned int max_bat_voltage_mV;
+	unsigned int max_charger_current_mA;
 	unsigned long usb_max_power;
 	unsigned long usb_event;
 
@@ -659,6 +662,53 @@ static void twl6030_config_iterm_reg(struct twl6030_charger_device_info *di,
 		pr_err("%s: Error access to TWL6030 (%d)\n", __func__, ret);
 }
 
+static int twl6030_get_volimit_config(void)
+{
+	u8 reg;
+	int ret;
+
+	ret = twl_i2c_read_u8(TWL6030_MODULE_CHARGER, &reg, CHARGERUSB_CTRLLIMIT1);
+	if (ret) {
+		pr_err("%s: Error access to TWL6030 (%d)\n", __func__, ret);
+		return -1;
+	}
+
+	return (((int) reg) * 20) + 3500;
+}
+
+static int twl6030_get_vilimit_config(void)
+{
+	u8 reg;
+	int ret;
+
+	ret = twl_i2c_read_u8(TWL6030_MODULE_CHARGER, &reg, CHARGERUSB_CTRLLIMIT2);
+	if (ret) {
+		pr_err("%s: Error access to TWL6030 (%d)\n", __func__, ret);
+		return -1;
+	}
+
+	reg &= 0xf; // mask only the value field
+
+	switch (reg) {
+		case 0x0 ... 0xe: return (reg + 1) * 100;
+		default: return 1500;
+	}
+}
+
+static int twl6030_is_volimit_locked(void)
+{
+	u8 reg;
+	int ret;
+
+	ret = twl_i2c_read_u8(TWL6030_MODULE_CHARGER, &reg, CHARGERUSB_CTRLLIMIT2);
+	if (ret) {
+		pr_err("%s: Error access to TLW6030 (%d)\n", __func__, ret);
+		return -1;
+	}
+
+	return !!(reg & LOCK_LIMIT);
+}
+
 static void twl6030_config_voreg_reg(struct twl6030_charger_device_info *di,
 		unsigned int voltagemV)
 {
@@ -834,7 +884,7 @@ static void twl6030_start_usb_charger(struct twl6030_charger_device_info *di, in
 
 	twl6030_config_vichrg_reg(di, di->charger_outcurrent_mA);
 	twl6030_config_cinlimit_reg(di, mA);
-	twl6030_config_voreg_reg(di, di->platform_data->max_bat_voltage_mV);
+	twl6030_config_voreg_reg(di, di->charger_voltage_mV);
 	twl6030_config_iterm_reg(di, di->platform_data->termination_current_mA);
 
 	if (mA >= 50) {
@@ -1312,9 +1362,9 @@ static ssize_t set_regulation_voltage(struct device *dev,
 	struct twl6030_charger_device_info *di = dev_get_drvdata(dev);
 
 	if ((strict_strtol(buf, 10, &val) < 0) || (val < 3500)
-			|| (val > di->platform_data->max_charger_voltage_mV))
+			|| (val > di->max_bat_voltage_mV))
 		return -EINVAL;
-	di->platform_data->max_bat_voltage_mV = val;
+	di->charger_voltage_mV = val;
 	twl6030_config_voreg_reg(di, val);
 
 	return status;
@@ -1326,7 +1376,7 @@ static ssize_t show_regulation_voltage(struct device *dev,
 	unsigned int val;
 	struct twl6030_charger_device_info *di = dev_get_drvdata(dev);
 
-	val = di->platform_data->max_bat_voltage_mV;
+	val = di->max_bat_voltage_mV;
 	return sprintf(buf, "%u\n", val);
 }
 
@@ -1388,7 +1438,7 @@ static ssize_t set_charge_current(struct device *dev,
 	struct twl6030_charger_device_info *di = dev_get_drvdata(dev);
 
 	if ((strict_strtol(buf, 10, &val) < 0) || (val < 300)
-			|| (val > di->platform_data->max_charger_current_mA))
+			|| (val > di->max_charger_current_mA))
 		return -EINVAL;
 	di->charger_outcurrent_mA = val;
 	twl6030_config_vichrg_reg(di, val);
@@ -1604,8 +1654,30 @@ static int __devinit twl6030_charger_probe(struct platform_device *pdev)
 	INIT_DELAYED_WORK_DEFERRABLE(&di->monitor_work, twl6030_monitor_work);
 
 	/* initialize for USB charging */
-	twl6030_config_limit1_reg(di, pdata->max_charger_voltage_mV);
-	twl6030_config_limit2_reg(di, pdata->max_charger_current_mA);
+
+	/* see if the bootloader already set and locked the limits */
+	if (twl6030_is_volimit_locked() == 1) {
+		/* read the vo and vi reg limits set in the bootloader */
+		di->max_bat_voltage_mV = twl6030_get_volimit_config();
+		di->max_charger_current_mA = twl6030_get_vilimit_config();
+
+		dev_warn(&pdev->dev, "Using limits set by bootloader: %d mV %d mA\n",
+				di->max_bat_voltage_mV, di->max_charger_current_mA);
+	} else {
+		/* use the conservative platform data defaults for safety */
+		di->max_bat_voltage_mV = pdata->max_bat_voltage_mV;
+		di->max_charger_current_mA = pdata->max_charger_current_mA;
+
+		twl6030_config_limit1_reg(di, pdata->max_charger_voltage_mV);
+		twl6030_config_limit2_reg(di, pdata->max_charger_current_mA);
+
+		dev_warn(&pdev->dev, "Using default limits: %d mV %d mA\n",
+				di->max_bat_voltage_mV, di->max_charger_current_mA);
+	}
+
+	di->charger_voltage_mV = di->max_bat_voltage_mV;
+	di->charger_outcurrent_mA = di->max_charger_current_mA;
+
 	ret = twl_i2c_write_u8(TWL6030_MODULE_CHARGER, MBAT_TEMP,
 			CONTROLLER_INT_MASK);
 	if (ret)
@@ -1617,8 +1689,6 @@ static int __devinit twl6030_charger_probe(struct platform_device *pdev)
 	if (ret)
 		goto init_failed;
 
-
-	di->charger_outcurrent_mA = di->platform_data->max_charger_current_mA;
 
 	twl6030_set_watchdog(di, 32);
 
