@@ -1054,134 +1054,150 @@ static struct regulator_init_data omap4_notle_clk32kg = {
 // TODO(eieio): revisit these when we optimize sleep current
 // TODO(atv): Investigate new pad configuration
 /* ttyO0 unused */
-//static struct omap_device_pad notle_uart1_pads[] __initdata = {
-//	{
-//        // fails on first with repeat
-//		//.name	= "mcspi1_cs2.uart1_cts",
-//		.name	= ".uart1_cts",
-//		.enable	= OMAP_PIN_INPUT_PULLUP | OMAP_MUX_MODE0,
-//	},
-//	{
-//		.name	= "uart1_rts.uart1_rts",
-//		.enable	= OMAP_PIN_OUTPUT | OMAP_MUX_MODE0,
-//	},
-//	{
-//		.name	= "uart1_tx.uart1_tx",
-//		.enable	= OMAP_PIN_OUTPUT | OMAP_MUX_MODE0,
-//	},
-//	{
-//		.name	= "uart1_rx.uart1_rx",
-//		.flags	= OMAP_DEVICE_PAD_REMUX,
-//		.enable	= OMAP_PIN_INPUT_PULLUP | OMAP_MUX_MODE0,
-//		.idle	= OMAP_PIN_INPUT_PULLUP | OMAP_MUX_MODE0,
-//	},
-//};
-//
-///* ttyO1 bluetooth */
-//static struct omap_device_pad notle_uart2_pads[] __initdata = {
-//	{
-//		.name	= "uart2_cts.uart2_cts",
-//		.enable	= OMAP_PIN_INPUT_PULLUP | OMAP_MUX_MODE0,
-//	},
-//	{
-//		.name	= "uart2_rts.uart2_rts",
-//		.enable	= OMAP_PIN_OUTPUT | OMAP_MUX_MODE0,
-//	},
-//	{
-//		.name	= "uart2_tx.uart2_tx",
-//		.enable	= OMAP_PIN_OUTPUT | OMAP_MUX_MODE0,
-//	},
-//	{
-//		.name	= "uart2_rx.uart2_rx",
-//		.flags	= OMAP_DEVICE_PAD_REMUX,
-//		.enable	= OMAP_PIN_INPUT_PULLUP | OMAP_MUX_MODE0,
-//		.idle	= OMAP_PIN_INPUT_PULLUP | OMAP_MUX_MODE0,
-//	},
-//};
+static struct omap_device_pad notle_uart1_pads[] __initdata = {
+	{
+        // fails on first with repeat
+		//.name	= "mcspi1_cs2.uart1_cts",
+		.name	= ".uart1_cts",
+		.enable	= OMAP_PIN_INPUT_PULLUP | OMAP_MUX_MODE0,
+	},
+	{
+		.name	= "uart1_rts.uart1_rts",
+		.enable	= OMAP_PIN_OUTPUT | OMAP_MUX_MODE0,
+	},
+	{
+		.name	= "uart1_tx.uart1_tx",
+		.enable	= OMAP_PIN_OUTPUT | OMAP_MUX_MODE0,
+	},
+	{
+		.name	= "uart1_rx.uart1_rx",
+		.flags	= OMAP_DEVICE_PAD_REMUX,
+		.enable	= OMAP_PIN_INPUT_PULLUP | OMAP_MUX_MODE0,
+		.idle	= OMAP_PIN_INPUT_PULLUP | OMAP_MUX_MODE0,
+	},
+};
+
+/* ttyO1 bluetooth */
+static struct omap_device_pad notle_uart2_pads[] __initdata = {
+	{
+		.name	= "uart2_cts.uart2_cts",
+		.enable	= OMAP_PIN_INPUT_PULLUP | OMAP_MUX_MODE0,
+	},
+	{
+		.name	= "uart2_rts.uart2_rts",
+		.enable	= OMAP_PIN_OUTPUT | OMAP_MUX_MODE0,
+	},
+	{
+		.name	= "uart2_tx.uart2_tx",
+		.enable	= OMAP_PIN_OUTPUT | OMAP_MUX_MODE0,
+	},
+	{
+		.name	= "uart2_rx.uart2_rx",
+		.flags	= OMAP_DEVICE_PAD_REMUX,
+		.enable	= OMAP_PIN_INPUT_PULLUP | OMAP_MUX_MODE0,
+		.idle	= OMAP_PIN_INPUT_PULLUP | OMAP_MUX_MODE0,
+	},
+};
 
 /* ttyO2 console port */
-//static struct omap_device_pad notle_uart3_pads[] __initdata = {
-//	{
-//		.name	= "uart3_cts_rctx.uart3_cts_rctx",
-//		.enable	= OMAP_PIN_INPUT_PULLUP | OMAP_MUX_MODE0,
-//	},
-//	{
-//		.name	= "uart3_rts_sd.uart3_rts_sd",
-//		.enable	= OMAP_PIN_OUTPUT | OMAP_MUX_MODE0,
-//	},
-//	{
-//		.name	= "uart3_tx_irtx.uart3_tx_irtx",
-//		.enable	= OMAP_PIN_OUTPUT | OMAP_MUX_MODE0,
-//	},
-//	{
-//		.name	= "uart3_rx_irrx.uart3_rx_irrx",
-//		.flags	= OMAP_DEVICE_PAD_REMUX | OMAP_DEVICE_PAD_WAKEUP,
-//		.enable	= OMAP_PIN_INPUT | OMAP_MUX_MODE0,
-//		.idle	= OMAP_PIN_INPUT | OMAP_MUX_MODE0,
-//	},
-//};
+static struct omap_device_pad notle_uart3_pads[] __initdata = {
+	{
+		.name	= "uart3_cts_rctx.uart3_cts_rctx",
+		.enable	= OMAP_PIN_INPUT_PULLUP | OMAP_MUX_MODE0,
+	},
+	{
+		.name	= "uart3_rts_sd.uart3_rts_sd",
+		.enable	= OMAP_PIN_OUTPUT | OMAP_MUX_MODE0,
+	},
+	{
+		.name	= "uart3_tx_irtx.uart3_tx_irtx",
+		.enable	= OMAP_PIN_OUTPUT | OMAP_MUX_MODE0,
+	},
+	{
+		.name	= "uart3_rx_irrx.uart3_rx_irrx",
+		.flags	= OMAP_DEVICE_PAD_REMUX | OMAP_DEVICE_PAD_WAKEUP,
+		.enable	= OMAP_PIN_INPUT | OMAP_MUX_MODE0,
+		.idle	= OMAP_PIN_INPUT | OMAP_MUX_MODE0,
+	},
+};
 
 /* ttyO3 GPS */
-//static struct omap_device_pad notle_uart4_pads[] __initdata = {
-//	{
-//		.name	= "uart4_tx.uart4_tx",
-//		.enable	= OMAP_PIN_OUTPUT | OMAP_MUX_MODE0,
-//	},
-//	{
-//		.name	= "uart4_rx.uart4_rx",
-//		.flags	= OMAP_DEVICE_PAD_REMUX,
-//		.enable	= OMAP_PIN_INPUT | OMAP_MUX_MODE0,
-//		.idle	= OMAP_PIN_INPUT | OMAP_MUX_MODE0,
-//	},
-//};
+static struct omap_device_pad notle_uart4_pads[] __initdata = {
+	{
+		.name	= "uart4_tx.uart4_tx",
+		.enable	= OMAP_PIN_OUTPUT | OMAP_MUX_MODE0,
+	},
+	{
+		.name	= "uart4_rx.uart4_rx",
+		.flags	= OMAP_DEVICE_PAD_REMUX,
+		.enable	= OMAP_PIN_INPUT | OMAP_MUX_MODE0,
+		.idle	= OMAP_PIN_INPUT | OMAP_MUX_MODE0,
+	},
+};
 
-//static struct omap_uart_port_info omap_serial_port_info[] __initdata = {
-//        { /* ttyO0 unused */
-//                .dma_enabled        = 0,
-//                .dma_rx_buf_size = DEFAULT_RXDMA_BUFSIZE,
-//                .dma_rx_poll_rate = DEFAULT_RXDMA_POLLRATE,
-//                .dma_rx_timeout = DEFAULT_RXDMA_TIMEOUT,
-//                .auto_sus_timeout = DEFAULT_AUTOSUSPEND_DELAY,
-//                .wer = 0,
-//        },
-//        { /* ttyO1 bluetooth */
-//                .dma_enabled        = 0,
-//                .dma_rx_buf_size = DEFAULT_RXDMA_BUFSIZE,
-//                .dma_rx_poll_rate = DEFAULT_RXDMA_POLLRATE,
-//                .dma_rx_timeout = DEFAULT_RXDMA_TIMEOUT,
-//                .auto_sus_timeout = DEFAULT_AUTOSUSPEND_DELAY,
-//                .wake_peer = bcm_bt_lpm_exit_lpm_locked,
-//                .rts_mux_driver_control = 1,
-//                .wer = (OMAP_UART_WER_TX | OMAP_UART_WER_RX | OMAP_UART_WER_CTS),
-//        },
-//        { /* ttyO2 console port */
-//                .dma_enabled        = 0,
-//                .dma_rx_buf_size = DEFAULT_RXDMA_BUFSIZE,
-//                .dma_rx_poll_rate = DEFAULT_RXDMA_POLLRATE,
-//                .dma_rx_timeout = DEFAULT_RXDMA_TIMEOUT,
-//                .auto_sus_timeout = DEFAULT_AUTOSUSPEND_DELAY,
-//                .wer = (OMAP_UART_WER_TX | OMAP_UART_WER_RX | OMAP_UART_WER_CTS),
-//        },
-//        {  /* ttyO3 GPS */
-//                .dma_enabled        = 0,
-//                .dma_rx_buf_size = DEFAULT_RXDMA_BUFSIZE,
-//                .dma_rx_poll_rate = DEFAULT_RXDMA_POLLRATE,
-//                .dma_rx_timeout = DEFAULT_RXDMA_TIMEOUT,
-//                .auto_sus_timeout = DEFAULT_AUTOSUSPEND_DELAY,
-//                .wer = (OMAP_UART_WER_TX | OMAP_UART_WER_RX | OMAP_UART_WER_CTS),
-//        },
-//};
+static struct omap_board_data uart1_board_data __initdata = {
+	.id = 0,
+	.pads = notle_uart1_pads,
+	.pads_cnt = ARRAY_SIZE(notle_uart1_pads),
+};
+
+static struct omap_board_data uart2_board_data __initdata = {
+	.id = 1,
+	.pads = notle_uart2_pads,
+	.pads_cnt = ARRAY_SIZE(notle_uart2_pads),
+};
+
+static struct omap_board_data uart3_board_data __initdata = {
+	.id = 2,
+	.pads = notle_uart3_pads,
+	.pads_cnt = ARRAY_SIZE(notle_uart3_pads),
+};
+
+static struct omap_board_data uart4_board_data __initdata = {
+	.id = 3,
+	.pads = notle_uart4_pads,
+	.pads_cnt = ARRAY_SIZE(notle_uart4_pads),
+};
+
+static struct omap_uart_port_info omap_serial_port_info[] __initdata = {
+        { /* ttyO0 unused */
+                .dma_enabled        = 0,
+                .dma_rx_buf_size = DEFAULT_RXDMA_BUFSIZE,
+                .dma_rx_poll_rate = DEFAULT_RXDMA_POLLRATE,
+                .dma_rx_timeout = DEFAULT_RXDMA_TIMEOUT,
+                .autosuspend_timeout = DEFAULT_AUTOSUSPEND_DELAY,
+        },
+        { /* ttyO1 bluetooth */
+                .dma_enabled        = 0,
+                .dma_rx_buf_size = DEFAULT_RXDMA_BUFSIZE,
+                .dma_rx_poll_rate = DEFAULT_RXDMA_POLLRATE,
+                .dma_rx_timeout = DEFAULT_RXDMA_TIMEOUT,
+                .autosuspend_timeout = DEFAULT_AUTOSUSPEND_DELAY,
+                //.wake_peer = bcm_bt_lpm_exit_lpm_locked,
+                .rts_mux_driver_control = 1,
+        },
+        { /* ttyO2 console port */
+                .dma_enabled        = 0,
+                .dma_rx_buf_size = DEFAULT_RXDMA_BUFSIZE,
+                .dma_rx_poll_rate = DEFAULT_RXDMA_POLLRATE,
+                .dma_rx_timeout = DEFAULT_RXDMA_TIMEOUT,
+                .autosuspend_timeout = DEFAULT_AUTOSUSPEND_DELAY,
+        },
+        {  /* ttyO3 GPS */
+                .dma_enabled        = 0,
+                .dma_rx_buf_size = DEFAULT_RXDMA_BUFSIZE,
+                .dma_rx_poll_rate = DEFAULT_RXDMA_POLLRATE,
+                .dma_rx_timeout = DEFAULT_RXDMA_TIMEOUT,
+                .autosuspend_timeout = DEFAULT_AUTOSUSPEND_DELAY,
+        },
+};
 
 void __init notle_serial_init(void)
 {
-	omap_serial_init();
-//	omap_serial_board_init(omap_serial_port_info);
-	/*omap_serial_init_port_pads(0, notle_uart1_pads,
-		ARRAY_SIZE(notle_uart1_pads), &omap_serial_port_info[0]);
-	omap_serial_init_port_pads(1, notle_uart2_pads,
-		ARRAY_SIZE(notle_uart2_pads), &omap_serial_port_info[1]);
-	omap_serial_init_port_pads(3, notle_uart4_pads,
-		ARRAY_SIZE(notle_uart4_pads), &omap_serial_port_info[3]);*/
+	omap_serial_init_port(&uart1_board_data, &omap_serial_port_info[0]);
+	omap_serial_init_port(&uart2_board_data, &omap_serial_port_info[1]);
+	omap_serial_init_port(&uart3_board_data, &omap_serial_port_info[2]);
+	omap_serial_init_port(&uart4_board_data, &omap_serial_port_info[3]);
 }
 
 /* Initialize FIQ Debugger */
