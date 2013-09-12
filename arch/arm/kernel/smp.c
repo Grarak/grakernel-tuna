@@ -280,6 +280,8 @@ asmlinkage void __cpuinit secondary_start_kernel(void)
 
 	cpu_init();
 
+	cpu_init();
+
 	/*
 	 * The identity mapping is uncached (strongly ordered), so
 	 * switch away from it before attempting any exclusive accesses.

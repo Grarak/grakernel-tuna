@@ -408,6 +408,7 @@ static void __init setup_processor(void)
 
 	cacheid_init();
 	cpu_proc_init();
+	set_my_cpu_offset(0);
 }
 
 /*
