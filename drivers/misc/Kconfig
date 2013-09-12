@@ -578,5 +578,5 @@ source "drivers/misc/gcx/gcioctl/Kconfig"
 source "drivers/misc/gcx/gcbv/Kconfig"
 source "drivers/misc/cache-2dmanager/Kconfig"
 source "drivers/misc/altera-stapl/Kconfig"
-
+source "drivers/misc/mpu/Kconfig"
 endmenu
