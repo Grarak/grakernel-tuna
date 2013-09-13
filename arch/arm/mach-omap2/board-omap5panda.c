@@ -1047,7 +1047,7 @@ void __init panda5_android_display_setup(void)
 
 static void __init omap_panda5_reserve(void)
 {
-	omap_rproc_reserve_cma(RPROC_CMA_OMAP5);
+	omap_rproc_reserve_cma(RPROC_CMA_OMAP5, NULL);
 	panda5_android_display_setup();
 	omap5_ion_init();
 	omap_reserve();

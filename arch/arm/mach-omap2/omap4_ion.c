@@ -69,6 +69,10 @@ void __init omap4_register_ion(void)
 	platform_device_register(&omap4_ion_device);
 }
 
+struct ion_platform_data * __init omap4_ion_get_ion_data_ptr() {
+	return &omap4_ion_data;
+}
+
 void __init omap4_ion_init(void)
 {
 	int i;

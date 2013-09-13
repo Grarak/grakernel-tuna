@@ -41,6 +41,11 @@
 #include <linux/mfd/twl6040.h>
 #include <linux/gps_elton.h>
 #include <linux/platform_data/omap-abe-twl6040.h>
+#include <linux/ion.h>
+#include <linux/omap_ion.h>
+#include "omap4_ion.h"
+#include <mach/omap-secure.h>
+
 
 #ifdef CONFIG_INPUT_LTR506ALS
 #include <linux/i2c/ltr506als.h>
@@ -104,6 +109,7 @@
 #define DEFAULT_RXDMA_POLLRATE	1		/* RX DMA polling rate (us) */
 #define DEFAULT_RXDMA_BUFSIZE	4096		/* RX DMA buffer size */
 #define DEFAULT_AUTOSUSPEND_DELAY	3000	/* Runtime autosuspend (msecs)*/
+#define DEFAULT_PHYS_ADDR_OFFSET 0x80000000 /* Default RAM start address */
 
 static notle_version NOTLE_VERSION = UNVERSIONED;
 
@@ -2188,6 +2194,15 @@ static struct omapfb_platform_data notle_fb_pdata = {
         },
 };
 
+static struct __devinitdata emif_custom_configs custom_configs = {
+    .mask = EMIF_CUSTOM_CONFIG_LPMODE,
+    .lpmode = EMIF_LP_MODE_SELF_REFRESH,
+    .lpmode_timeout_performance = 512,
+    .lpmode_timeout_power = 512,
+    /* only at OPP100 should we use performance value */
+    .lpmode_freq_threshold = 400000000,
+};
+
 static u32 __get_notle_memsize(void)
 {
     // Check the DMM Register to figure out if this is 1 GB or 2 GB device
@@ -2237,13 +2252,13 @@ static void __init notle_init(void)
             if (notle_version_after(V1_EVT2) && (mem_size_mb==2048))
             {
                 omap_emif_set_device_details(1, &lpddr2_elpida_4G_S4_x2_info, lpddr2_elpida_4G_S4_timings, ARRAY_SIZE(lpddr2_elpida_4G_S4_timings),
-                                             &lpddr2_elpida_S4_min_tck, NULL);
+                                             &lpddr2_elpida_S4_min_tck,  &custom_configs);
                 omap_emif_set_device_details(2, &lpddr2_elpida_4G_S4_x2_info, lpddr2_elpida_4G_S4_timings, ARRAY_SIZE(lpddr2_elpida_4G_S4_timings),
-                                             &lpddr2_elpida_S4_min_tck, NULL);
+                                             &lpddr2_elpida_S4_min_tck,  &custom_configs);
             }
             else {
                 omap_emif_set_device_details(1, &lpddr2_elpida_4G_S4_info, lpddr2_elpida_4G_S4_timings, ARRAY_SIZE(lpddr2_elpida_4G_S4_timings),
-                                             &lpddr2_elpida_S4_min_tck, NULL);
+                                             &lpddr2_elpida_S4_min_tck, &custom_configs);
             }
 
             omap4_mux_init(evt2_board_mux, evt2_board_wkup_mux, package);
@@ -2365,37 +2380,114 @@ static struct sgx_omaplfb_platform_data notle_omaplfb_plat_data = {
 
 static void __init notle_reserve(void)
 {
-	omap_rproc_reserve_cma(RPROC_CMA_OMAP4);
-#ifdef CONFIG_ION_OMAP
-        omap_android_display_setup(&panel_notle_dss_data,
-                                   NULL,
-                                   &notle_omaplfb_plat_data,
-                                   &notle_fb_pdata
-                                   );
-	omap4_ion_init();
+    // Compute Carve out sizes based on Memory
+    int i = 0;
+    size_t ram_size = omap_total_ram_size();
+    size_t smc_size = PHYS_ADDR_SMC_SIZE;
+    size_t ion_heap_secure_input_size = OMAP4_ION_HEAP_SECURE_INPUT_SIZE;
+#ifdef CONFIG_OMAP_REMOTEPROC_IPU
+    size_t ipu_heap_size = (SZ_1M * 107);
 #else
-        omap_android_display_setup(&panel_notle_dss_data,
-                                   NULL,
-                                   NULL,
-                                   &notle_fb_pdata
-                                   );
+    size_t ipu_heap_size = 0;
+#endif
+#ifdef CONFIG_OMAP_REMOTEPROC_DSP
+    size_t dsp_heap_size  = (SZ_1M * 50);
+#else
+    size_t dsp_heap_size  = 0;
+#endif
+    size_t ion_heap_tiler_size = OMAP4_ION_HEAP_TILER_SIZE;
+    size_t ion_heap_nonsecure_tiler_size = OMAP4_ION_HEAP_NONSECURE_TILER_SIZE;
+
+    // Compute Carve-out addresses
+    phys_addr_t smc_addr = DEFAULT_PHYS_ADDR_OFFSET + ram_size - smc_size;
+    phys_addr_t ion_heap_secure_input_addr = smc_addr - ion_heap_secure_input_size;
+    phys_addr_t ipu_heap_addr = ion_heap_secure_input_addr - ipu_heap_size;
+    phys_addr_t dsp_heap_addr = ipu_heap_addr - dsp_heap_size;
+    phys_addr_t ion_heap_tiler_addr = dsp_heap_addr - ion_heap_tiler_size;
+    phys_addr_t ion_heap_nonsecure_tiler_addr = ion_heap_tiler_addr - ion_heap_nonsecure_tiler_size;
+    // Get the ION Platform Data Structure and Update the info.
+    struct ion_platform_data * ion_platform_data_ptr = omap4_ion_get_ion_data_ptr();
+
+    struct omap_rproc_config rproc_config;
+    rproc_config.dsp_address = dsp_heap_addr;
+    rproc_config.dsp_size    = dsp_heap_size;
+    rproc_config.ipu_address = ipu_heap_addr;
+    rproc_config.ipu_size    = ipu_heap_size;
+
+    omap_init_ram_size();
+    omap_ram_console_init(OMAP_RAM_CONSOLE_START_DEFAULT,
+            OMAP_RAM_CONSOLE_SIZE_DEFAULT);
+
+    // Figure out the address based on memory
+    printk("Notle Carveout-----------------------\n");
+    printk("Ram Size               : 0x%08x\n", ram_size);
+    printk("physical Offset        : 0x%08x\n", DEFAULT_PHYS_ADDR_OFFSET);
+    printk("SMC Carve Out          : 0x%08x Size: (%08x) \n", smc_addr, smc_size);
+    printk("Ion Secure Heap (I)    : 0x%08x Size: (%08x) \n", ion_heap_secure_input_addr, ion_heap_secure_input_size);
+#ifdef CONFIG_OMAP_REMOTEPROC_IPU
+    printk("IPU Heap               : 0x%08x Size: (%08x) \n", ipu_heap_addr, ipu_heap_size);
+#endif
+#ifdef CONFIG_OMAP_REMOTEPROC_DSP
+    printk("DSP Heap               : 0x%08x Size: (%08x) \n", dsp_heap_addr, dsp_heap_addr);
+#endif
+    printk("Tiler Addr             : 0x%08x Size: (%08x) \n", ion_heap_tiler_addr, ion_heap_tiler_size);
+    printk("Tiler non-secure addr  : 0x%08x Size: (%08x) \n", ion_heap_nonsecure_tiler_addr, ion_heap_nonsecure_tiler_size);
+    printk("-------------------------------------\n");
+
+#ifdef CONFIG_ION_OMAP
+    // Update OMAP ion carveouts
+    for (i = 0; i < ion_platform_data_ptr->nr; i++) {
+        struct ion_platform_heap *h = &ion_platform_data_ptr->heaps[i];
+        switch (h->id) {
+        case OMAP_ION_HEAP_SECURE_INPUT:
+            h->base = ion_heap_secure_input_addr;
+            h->size = ion_heap_secure_input_size;
+            break;
+        case OMAP_ION_HEAP_NONSECURE_TILER:
+            h->base = ion_heap_tiler_addr;
+            h->size = ion_heap_tiler_size;
+            break;
+        case OMAP_ION_HEAP_TILER:
+            h->base = ion_heap_nonsecure_tiler_addr;
+            h->size = ion_heap_nonsecure_tiler_size;
+            break;
+        default:
+            break;
+        }
+        pr_info("%s: %s id=%u [%lx-%lx] size=%x\n",
+                __func__, h->name, h->id,
+                h->base, h->base + h->size, h->size);
+    }
+
+    omap_android_display_setup(&panel_notle_dss_data,
+                                NULL,
+                                &notle_omaplfb_plat_data,
+                                &notle_fb_pdata
+                                );
+    omap4_ion_init();
+#else
+    omap_android_display_setup(&panel_notle_dss_data,
+                                NULL,
+                                NULL,
+                                &notle_fb_pdata
+                                );
 #endif
 
-	omap_ram_console_init(OMAP_RAM_CONSOLE_START_DEFAULT,
-			OMAP_RAM_CONSOLE_SIZE_DEFAULT);
-
-	omap_reserve();
+    // Do the reservation!
+    omap_secure_set_secure_workspace_addr(smc_addr, smc_size);
+    omap_rproc_reserve_cma(RPROC_CMA_OMAP4, &rproc_config);
+    omap_reserve();
 }
 
 MACHINE_START(NOTLE, "OMAP4430")
-	/* Maintainer: David Anders - Texas Instruments Inc */
-	.atag_offset    = 0x100,
-	.reserve	= notle_reserve,
-	.map_io		= notle_map_io,
-	.init_early	= notle_init_early,
-	.init_irq	= gic_init_irq,
-	.handle_irq = gic_handle_irq,
-	.init_machine	= notle_init,
-	.timer		= &omap4_timer,
-	.restart = omap_prcm_restart,
+    /* Maintainer: David Anders - Texas Instruments Inc */
+    .atag_offset    = 0x100,
+    .reserve    = notle_reserve,
+    .map_io        = notle_map_io,
+    .init_early    = notle_init_early,
+    .init_irq    = gic_init_irq,
+    .handle_irq = gic_handle_irq,
+    .init_machine    = notle_init,
+    .timer        = &omap4_timer,
+    .restart = omap_prcm_restart,
 MACHINE_END

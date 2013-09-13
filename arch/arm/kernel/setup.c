@@ -526,6 +526,16 @@ int __init arm_add_memory(phys_addr_t start, unsigned long size)
 	bank->start = PAGE_ALIGN(start);
 
 #ifndef CONFIG_LPAE
+#ifdef CONFIG_MACH_NOTLE
+       /*
+        * Work around the size issue by taking off one page such that
+        * 1024 or 2048 Meg will work for the ATAG_MEM use case.
+        * Take out 1 meg such that it is 0xFFF00000 aligned for ducati.
+       */
+
+       if (size > (PAGE_SIZE<<8))
+           size -= (PAGE_SIZE<<8);
+#else
 	if (bank->start + size < bank->start) {
 		printk(KERN_CRIT "Truncating memory at 0x%08llx to fit in "
 			"32-bit physical address space\n", (long long)start);
@@ -536,6 +546,7 @@ int __init arm_add_memory(phys_addr_t start, unsigned long size)
 		 */
 		size = ULONG_MAX - bank->start;
 	}
+#endif
 #endif
 
 	bank->size = size & PAGE_MASK;

@@ -15,7 +15,7 @@
 #include <linux/init.h>
 #include <linux/io.h>
 #include <linux/dma-mapping.h>
-
+#include <asm/setup.h>
 #include <plat/common.h>
 #include <plat/board.h>
 #include <plat/vram.h>
@@ -31,6 +31,7 @@
 
 struct omap_board_config_kernel *omap_board_config __initdata;
 int omap_board_config_size;
+phys_addr_t omapX_total_ram_size = 0;
 
 static const void *__init get_config(u16 tag, size_t len,
 		int skip, size_t *len_out)
@@ -81,3 +82,19 @@ void __init omap_init_consistent_dma_size(void)
 	init_consistent_dma_size(CONFIG_FB_OMAP_CONSISTENT_DMA_SIZE << 20);
 #endif
 }
+
+void omap_init_ram_size(void)
+{
+   int i;
+   for (i=0; i < meminfo.nr_banks; i++)
+	   omapX_total_ram_size += meminfo.bank[i].size;
+}
+
+size_t omap_total_ram_size(void)
+{
+   if (!omapX_total_ram_size)
+	   omap_init_ram_size();
+   return omapX_total_ram_size;
+}
+
+

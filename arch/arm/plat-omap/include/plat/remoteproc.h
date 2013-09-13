@@ -69,13 +69,20 @@ struct omap_rproc_pdata {
 	u8 timers_cnt;
 };
 
+struct omap_rproc_config {
+	phys_addr_t ipu_address;
+	size_t      ipu_size;
+	phys_addr_t dsp_address;
+	size_t      dsp_size;
+};
+
 #if defined(CONFIG_OMAP_REMOTEPROC) || defined(CONFIG_OMAP_REMOTEPROC_MODULE)
 
-void __init omap_rproc_reserve_cma(int platform_type);
+void __init omap_rproc_reserve_cma(int platform_type, struct omap_rproc_config * config);
 
 #else
 
-static inline void __init omap_rproc_reserve_cma(int platform_type)
+static inline void __init omap_rproc_reserve_cma(int platform_type,  struct omap_rproc_config * config)
 {
 }
 

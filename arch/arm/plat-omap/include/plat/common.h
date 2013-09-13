@@ -34,7 +34,8 @@ extern int __init omap_init_clocksource_32k(void);
 
 extern void omap_reserve(void);
 extern int omap_dss_reset(struct omap_hwmod *);
-
+void omap_init_ram_size(void);
+size_t omap_total_ram_size(void);
 void omap_sram_init(void);
 
 #endif /* __ARCH_ARM_MACH_OMAP_COMMON_H */

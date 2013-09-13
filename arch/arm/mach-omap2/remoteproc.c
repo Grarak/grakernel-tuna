@@ -221,18 +221,24 @@ static struct rproc_mem_pool_data *omap_rproc_get_pool_data(const char *name)
 }
 #endif
 
-void __init omap_rproc_reserve_cma(int platform_type)
+void __init omap_rproc_reserve_cma(int platform_type,  struct omap_rproc_config * config)
 {
 	int ret;
 	phys_addr_t cma_addr = 0;
 	unsigned long cma_size = 0;
 
 #ifdef CONFIG_OMAP_REMOTEPROC_DSP
-	cma_size = CONFIG_OMAP_DSP_CMA_SIZE;
-	if (platform_type == RPROC_CMA_OMAP4)
-		cma_addr = OMAP4_RPROC_CMA_BASE_DSP;
-	else if (platform_type == RPROC_CMA_OMAP5)
-		cma_addr = OMAP5_RPROC_CMA_BASE_DSP;
+	if (config != NULL) {
+		cma_size = config->dsp_size;
+		cma_addr = config->dsp_address;
+	}
+	else {
+		cma_size = CONFIG_OMAP_DSP_CMA_SIZE;
+		if (platform_type == RPROC_CMA_OMAP4)
+			cma_addr = OMAP4_RPROC_CMA_BASE_DSP;
+		else if (platform_type == RPROC_CMA_OMAP5)
+			cma_addr = OMAP5_RPROC_CMA_BASE_DSP;
+	}
 
 #ifdef CONFIG_REMOTEPROC_USE_CARVEOUT
 	/* memblock_remove for OMAP4's dsp "tesla" remote processor */
@@ -253,12 +259,18 @@ void __init omap_rproc_reserve_cma(int platform_type)
 #endif
 
 #ifdef CONFIG_OMAP_REMOTEPROC_IPU
-	if (platform_type == RPROC_CMA_OMAP4) {
-		cma_size = CONFIG_OMAP4_IPU_CMA_SIZE;
-		cma_addr = OMAP4_RPROC_CMA_BASE_IPU;
-	} else if (platform_type == RPROC_CMA_OMAP5) {
-		cma_size = CONFIG_OMAP5_IPU_CMA_SIZE;
-		cma_addr = OMAP5_RPROC_CMA_BASE_IPU;
+	if (config != NULL) {
+		cma_size = config->ipu_size;
+		cma_addr = config->ipu_address;
+	}
+	else {
+		if (platform_type == RPROC_CMA_OMAP4) {
+			cma_size = CONFIG_OMAP4_IPU_CMA_SIZE;
+			cma_addr = OMAP4_RPROC_CMA_BASE_IPU;
+		} else if (platform_type == RPROC_CMA_OMAP5) {
+			cma_size = CONFIG_OMAP5_IPU_CMA_SIZE;
+			cma_addr = OMAP5_RPROC_CMA_BASE_IPU;
+		}
 	}
 
 #ifdef CONFIG_REMOTEPROC_USE_CARVEOUT

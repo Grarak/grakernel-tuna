@@ -618,7 +618,7 @@ static void __init omap4_panda_reserve(void)
 	omap_ram_console_init(OMAP_RAM_CONSOLE_START_DEFAULT,
 			OMAP_RAM_CONSOLE_SIZE_DEFAULT);
 
-	omap_rproc_reserve_cma(RPROC_CMA_OMAP4);
+	omap_rproc_reserve_cma(RPROC_CMA_OMAP4, NULL);
 
 	omap4_ion_init();
 

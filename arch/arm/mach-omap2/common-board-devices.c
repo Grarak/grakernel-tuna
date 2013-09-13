@@ -222,6 +222,104 @@ struct lpddr2_min_tck lpddr2_elpida_S4_min_tck = {
 /*
  * AC timings for Elpida LPDDR2-s4 4Gb memory device
  */
+
+#ifdef CONFIG_MACH_NOTLE
+struct lpddr2_timings lpddr2_elpida_4G_S4_timings[] = {
+	/* Speed bin 800(400 MHz) */
+	[0] = {
+		.max_freq	= 400000000,
+		.min_freq	= 10000000,
+		.tRPab		= 21000,
+		.tRCD		= 18000,
+		.tWR		= 15000,
+		.tRAS_min	= 42000,
+		.tRRD		= 10000,
+		.tWTR		= 7500,
+		.tXP		= 7500,
+		.tRTP		= 7500,
+		.tCKESR		= 15000,
+		.tDQSCK_max	= 5500,
+		.tFAW		= 50000,
+		.tZQCS		= 90000,
+		.tZQCL		= 360000,
+		.tZQinit	= 1000000,
+		.tRAS_max_ns	= 70000,
+		.tRTW		= 7500,
+		.tAONPD		= 1000,
+		.tDQSCK_max_derated = 6000,
+	},
+	/* Speed bin 533(266 MHz) */
+	[1] = {
+		.max_freq	= 266666666,
+		.min_freq	= 10000000,
+		.tRPab		= 21000,
+		.tRCD		= 18000,
+		.tWR		= 15000,
+		.tRAS_min	= 42000,
+		.tRRD		= 10000,
+		.tWTR		= 7500,
+		.tXP		= 7500,
+		.tRTP		= 7500,
+		.tCKESR		= 15000,
+		.tDQSCK_max	= 5500,
+		.tFAW		= 50000,
+		.tZQCS		= 90000,
+		.tZQCL		= 360000,
+		.tZQinit	= 1000000,
+		.tRAS_max_ns	= 70000,
+		.tRTW		= 7500,
+		.tAONPD		= 1000,
+		.tDQSCK_max_derated = 6000,
+	},
+	/* Speed bin 466(233 MHz) */
+	[2] = {
+		.max_freq	= 233333333,
+		.min_freq	= 10000000,
+		.tRPab		= 21000,
+		.tRCD		= 18000,
+		.tWR		= 15000,
+		.tRAS_min	= 42000,
+		.tRRD		= 10000,
+		.tWTR		= 10000,
+		.tXP		= 7500,
+		.tRTP		= 7500,
+		.tCKESR		= 15000,
+		.tDQSCK_max	= 5500,
+		.tFAW		= 50000,
+		.tZQCS		= 90000,
+		.tZQCL		= 360000,
+		.tZQinit	= 1000000,
+		.tRAS_max_ns	= 70000,
+		.tRTW		= 7500,
+		.tAONPD		= 1000,
+		.tDQSCK_max_derated = 6000,
+	},
+	/* Speed bin 400(200 MHz) */
+	[3] = {
+		.max_freq	= 200000000,
+		.min_freq	= 10000000,
+		.tRPab		= 21000,
+		.tRCD		= 18000,
+		.tWR		= 15000,
+		.tRAS_min	= 42000,
+		.tRRD		= 10000,
+		.tWTR		= 10000,
+		.tXP		= 7500,
+		.tRTP		= 7500,
+		.tCKESR		= 15000,
+		.tDQSCK_max	= 5500,
+		.tFAW		= 50000,
+		.tZQCS		= 90000,
+		.tZQCL		= 360000,
+		.tZQinit	= 1000000,
+		.tRAS_max_ns	= 70000,
+		.tRTW		= 7500,
+		.tAONPD		= 1000,
+		.tDQSCK_max_derated = 6000,
+	}
+};
+
+#else
 struct lpddr2_timings lpddr2_elpida_4G_S4_timings[] = {
 	/* Speed bin 1066(533 MHz) */
 	[0] = {
@@ -362,6 +460,7 @@ struct lpddr2_timings lpddr2_elpida_4G_S4_timings[] = {
 		.tDQSCK_max_derated = 6000,
 	}
 };
+#endif
 
 /*
  * SDRAM memory data
