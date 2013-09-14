@@ -629,5 +629,12 @@ config TILE_SROM
 	  device appear much like a simple EEPROM, and knows
 	  how to partition a single ROM for multiple purposes.
 
+config GPS_ELTON
+        tristate "Enable the GPS SiRF 4e driver chip."
+        default n
+        depends on HAS_EARLYSUSPEND
+        help
+          Enables the GPS SiRF4e driver chip.
+
 endmenu
 
