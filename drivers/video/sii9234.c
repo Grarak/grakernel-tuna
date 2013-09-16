@@ -615,27 +615,6 @@ static int tpi_write_reg(struct sii9234_data *sii9234, unsigned int offset,
 			value);
 }
 
-static int tpi_read_reg(struct sii9234_data *sii9234, unsigned int offset,
-		u8 *value)
-{
-	int ret;
-
-	if (!value)
-		return -EINVAL;
-
-	ret = i2c_smbus_write_byte(sii9234->pdata->tpi_client, offset);
-	if (ret < 0)
-		return ret;
-
-	ret = i2c_smbus_read_byte(sii9234->pdata->tpi_client);
-	if (ret < 0)
-		return ret;
-
-	*value = ret & 0x000000FF;
-
-	return 0;
-}
-
 static int hdmi_rx_write_reg(struct sii9234_data *sii9234, unsigned int offset,
 		u8 value)
 {
