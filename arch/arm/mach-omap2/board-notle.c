@@ -700,15 +700,9 @@ static struct omap_dss_board_info panel_notle_dss_data = {
 };
 
 static struct omap_musb_board_data musb_board_data = {
-	.interface_type		= MUSB_INTERFACE_UTMI,
-#ifdef CONFIG_USB_MUSB_OTG
-	.mode		= MUSB_OTG,
-#elif defined(CONFIG_USB_MUSB_HDRC_HCD)
-	.mode		= MUSB_HOST,
-#elif defined(CONFIG_USB_GADGET_MUSB_HDRC)
-	.mode		= MUSB_PERIPHERAL,
-#endif
-	.power			= 100,
+  .interface_type = MUSB_INTERFACE_UTMI,
+  .mode           = MUSB_OTG,
+  .power          = 100,
 };
 
 // Need an empty struct or USB won't initialize
