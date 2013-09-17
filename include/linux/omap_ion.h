@@ -39,8 +39,6 @@ struct omap_ion_tiler_alloc_data {
 	struct ion_handle *handle;
 	size_t stride;
 	size_t offset;
-	u32 out_align;
-	u32 token;
 };
 
 #ifdef __KERNEL__
