@@ -32,6 +32,12 @@ struct omap_irq_stat {
 static struct omap_irq_stat notle_irq_stats[1024];
 #define NUM_IRQ_STATS (sizeof(notle_irq_stats) / sizeof(notle_irq_stats[0]))
 
+/*
+ * Pins corresponding to GPIO blocks 0-6. These are documented in the OMAP44xx TRM
+ * under Table 18-527. CONTROL_PADCONF_WAKEUPEVENT_0 and subsequent sections. Signals
+ * are named here based on mux config settings, but the TRM identifies by primary function.
+ * Use the elton schematic to resolve these aliases.
+ */
 static struct omap_pin_stat notle_io_stats[32 * 6] = {
 	OMAP_IO_STAT(0*32 +  0, "sdmmc2_dat0", "Unknown", false),
 	OMAP_IO_STAT(0*32 +  1, "sdmmc2_dat1", "Unknown", false),
@@ -43,21 +49,21 @@ static struct omap_pin_stat notle_io_stats[32 * 6] = {
 	OMAP_IO_STAT(0*32 +  7, "sdmmc2_dat7", "Unknown", false),
 	OMAP_IO_STAT(0*32 +  8, "gpio_32", "Not Connected", false),
 	OMAP_IO_STAT(0*32 +  9, "gpio_33", "Not Connected", false),
-	OMAP_IO_STAT(0*32 + 10, "gpio_34", "Board ID0", true),
+	OMAP_IO_STAT(0*32 + 10, "gpio_34", "Board ID0", false),
 	OMAP_IO_STAT(0*32 + 11, "gpio_35", "Not Connected", false),
 	OMAP_IO_STAT(0*32 + 12, "gpio_36", "BT_WAKE", true),
 	OMAP_IO_STAT(0*32 + 13, "gpio_37", "Not Connected", false),
 	OMAP_IO_STAT(0*32 + 14, "gpio_38", "Not Connected", false),
 	OMAP_IO_STAT(0*32 + 15, "gpio_39", "Not Connected", false),
-	OMAP_IO_STAT(0*32 + 16, "gpio_40", "Board ID1", true),
+	OMAP_IO_STAT(0*32 + 16, "gpio_40", "Board ID1", false),
 	OMAP_IO_STAT(0*32 + 17, "gpio_41", "Not Connected", false),
-	OMAP_IO_STAT(0*32 + 18, "gpio_42", "Board ID2", true),
+	OMAP_IO_STAT(0*32 + 18, "gpio_42", "Board ID2", false),
 	OMAP_IO_STAT(0*32 + 19, "gpio_154", "Not Connected", false),
 	OMAP_IO_STAT(0*32 + 20, "gpio_44", "Not Connected", false),
-	OMAP_IO_STAT(0*32 + 21, "gpio_45", "USB_MUX_CB1", true),
-	OMAP_IO_STAT(0*32 + 22, "gpio_46", "USB_MUX_CB0", true),
+	OMAP_IO_STAT(0*32 + 21, "gpio_45", "USB_MUX_CB1", false),
+	OMAP_IO_STAT(0*32 + 22, "gpio_46", "USB_MUX_CB0", false),
 	OMAP_IO_STAT(0*32 + 23, "gpio_152", "Not Connected", false),
-	OMAP_IO_STAT(0*32 + 24, "gpio_48", "WL_BT_REG_ON", true),
+	OMAP_IO_STAT(0*32 + 24, "gpio_48", "WL_BT_REG_ON", false),
 	OMAP_IO_STAT(0*32 + 25, "gpio_49", "Not Connected", false),
 	OMAP_IO_STAT(0*32 + 26, "gpio_50", "Not Connected", false),
 	OMAP_IO_STAT(0*32 + 27, "gpio_51", "Not Connected", false),
@@ -97,9 +103,9 @@ static struct omap_pin_stat notle_io_stats[32 * 6] = {
 
 	OMAP_IO_STAT(2*32 +  0, "gpio_83", "Not Connected", false),
 	OMAP_IO_STAT(2*32 +  1, "gpio_84", "Not Connected", false),
-	OMAP_IO_STAT(2*32 +  2, "gpio_85", "FPGA_CDONE", true),
+	OMAP_IO_STAT(2*32 +  2, "gpio_85", "FPGA_CDONE", false),
 	OMAP_IO_STAT(2*32 +  3, "gpio_86", "Not Connected", false),
-	OMAP_IO_STAT(2*32 +  4, "gpio_87", "FPGA_CRESET_B", true),
+	OMAP_IO_STAT(2*32 +  4, "gpio_87", "FPGA_CRESET_B", false),
 	OMAP_IO_STAT(2*32 +  5, "usbb1_ulpiphy_dat0", "Unknown", false),
 	OMAP_IO_STAT(2*32 +  6, "usbb1_ulpiphy_dat1", "Unknown", false),
 	OMAP_IO_STAT(2*32 +  7, "usbb1_ulpiphy_dat2", "Unknown", false),
@@ -159,6 +165,8 @@ static struct omap_pin_stat notle_io_stats[32 * 6] = {
 	OMAP_IO_STAT(4*32 + 28, "gpio_169", "Not Connected", false),
 	OMAP_IO_STAT(4*32 + 29, "gpio_170", "Not Connected", false),
 	OMAP_IO_STAT(4*32 + 30, "gpio_171", "Not Connected", false),
+
+	OMAP_IO_STAT(5*32 + 23, "gpio_13", "SOC_INT", true),
 };
 #define NUM_IO_STATS (sizeof(notle_io_stats) / sizeof(notle_io_stats[0]))
 
@@ -174,12 +182,12 @@ static struct omap_pin_stat notle_wk_stats[32] = {
 	OMAP_WK_STAT(8, "sys_drm_msecure", "Unknown", false),
 	OMAP_WK_STAT(9, "gpio_wk30", "TOP_SW", true),
 	OMAP_WK_STAT(10, "gpio_wk31", "BAT_LOW", true),
-	OMAP_WK_STAT(11, "gpio_wk7", "FPGA:PIO1_C9", true),
-	OMAP_WK_STAT(12, "gpio_wk8", "FPGA:GBIN2_PIO1_D8", true),
+	OMAP_WK_STAT(11, "gpio_wk7", "FPGA:PIO1_C9", false),
+	OMAP_WK_STAT(12, "gpio_wk8", "FPGA:GBIN2_PIO1_D8", false),
 	OMAP_WK_STAT(13, "sys_32k", "Unknown", false),
 	OMAP_WK_STAT(14, "sys_nreswarm", "Unknown", false),
 	OMAP_WK_STAT(15, "sys_pwr_req", "Unknown", false),
-	OMAP_WK_STAT(16, "gpio_wk29", "FPGA_CBSEL0", true),
+	OMAP_WK_STAT(16, "gpio_wk29", "FPGA_CBSEL0", false),
 	OMAP_WK_STAT(17, "gpio_wk9", "Unknown", false),
 	OMAP_WK_STAT(18, "gpio_wk10", "Unknown", false),
 };
