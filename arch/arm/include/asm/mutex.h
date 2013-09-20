@@ -13,8 +13,9 @@
  * accessors and use atomic_dec to avoid the extra xchg operations
  * on the locking slowpaths.
  */
-#if __LINUX_ARM_ARCH < 6
+#if __LINUX_ARM_ARCH__ < 6
 #include <asm-generic/mutex-xchg.h>
 #else
 #include <asm-generic/mutex-dec.h>
+#endif
 #endif
