@@ -32,6 +32,15 @@ struct omap_irq_stat {
 static struct omap_irq_stat notle_irq_stats[1024];
 #define NUM_IRQ_STATS (sizeof(notle_irq_stats) / sizeof(notle_irq_stats[0]))
 
+static inline bool is_irq_stat(const void *v)
+{
+	return (struct omap_irq_stat *) v >= notle_irq_stats &&
+		(struct omap_irq_stat *) v <= &notle_irq_stats[NUM_IRQ_STATS - 1];
+}
+
+static unsigned long long wakeup_count;
+static void *last_wakeup;
+
 /*
  * Pins corresponding to GPIO blocks 0-6. These are documented in the OMAP44xx TRM
  * under Table 18-527. CONTROL_PADCONF_WAKEUPEVENT_0 and subsequent sections. Signals
@@ -243,6 +252,9 @@ void omap_board_io_event(int index)
 		return;
 
 	notle_io_stats[index].count++;
+	wakeup_count++;
+
+	last_wakeup = &notle_io_stats[index];
 }
 
 void omap_board_wk_event(int index)
@@ -251,6 +263,9 @@ void omap_board_wk_event(int index)
 		return;
 
 	notle_wk_stats[index].count++;
+	wakeup_count++;
+
+	last_wakeup = &notle_wk_stats[index];
 }
 
 void omap_board_gpio_event(int index)
@@ -267,6 +282,9 @@ void omap_board_irq_event(int index, const char *name)
 		strlcpy(notle_irq_stats[index].name, name, sizeof(notle_irq_stats[index].name));
 
 	notle_irq_stats[index].count++;
+	wakeup_count++;
+
+	last_wakeup = &notle_irq_stats[index];
 }
 
 static void *pin_for_index(unsigned int index)
@@ -305,8 +323,7 @@ static int wakeups_show(struct seq_file *m, void *v)
 	if (v == SEQ_START_TOKEN) {
 		seq_puts(m, "pin            use            count\n");
 	} else {
-		if ((struct omap_irq_stat *) v >= notle_irq_stats &&
-				(struct omap_irq_stat *) v <= &notle_irq_stats[NUM_IRQ_STATS - 1]) {
+		if (is_irq_stat(v)) {
 			struct omap_irq_stat *s = v;
 
 			if (s->count)
@@ -324,6 +341,30 @@ static int wakeups_show(struct seq_file *m, void *v)
 	return 0;
 }
 
+static int wakeup_count_show(struct seq_file *m, void *v)
+{
+	seq_printf(m, "%llu\n", wakeup_count);
+	return 0;
+}
+
+static int wakeup_last_show(struct seq_file *m, void *v)
+{
+	if (!last_wakeup) {
+		seq_printf(m, "None\n");
+	} if (is_irq_stat(last_wakeup)) {
+		struct omap_irq_stat *s = last_wakeup;
+
+		seq_printf(m, "%s IRQ %d %llu\n", s->name[0] ? s->name : "Unknown",
+				s - notle_irq_stats, s->count);
+	} else {
+		struct omap_pin_stat *s = last_wakeup;
+
+		seq_printf(m, "%s %s %llu\n", s->name, s->use, s->count);
+	}
+
+	return 0;
+}
+
 static struct seq_operations wakeups_ops = {
 	.start = wakeups_start,
 	.next = wakeups_next,
@@ -336,11 +377,35 @@ static int wakeups_open(struct inode *inode, struct file *file)
 	return seq_open(file, &wakeups_ops);
 }
 
+static int wakeup_count_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, wakeup_count_show, NULL);
+}
+
+static int wakeup_last_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, wakeup_last_show, NULL);
+}
+
 static struct file_operations proc_wakeups_operations = {
 	.open = wakeups_open,
 	.read = seq_read,
 	.llseek = seq_lseek,
 	.release = seq_release,
+};
+
+static struct file_operations proc_wakeup_count_operations = {
+	.open = wakeup_count_open,
+	.read = seq_read,
+	.llseek = seq_lseek,
+	.release = single_release,
+};
+
+static struct file_operations proc_wakeup_last_operations = {
+	.open = wakeup_last_open,
+	.read = seq_read,
+	.llseek = seq_lseek,
+	.release = single_release,
 };
 
 static int __init proc_wakeups_init(void)
@@ -350,6 +415,14 @@ static int __init proc_wakeups_init(void)
 	entry = create_proc_entry("wakeups", 0, NULL);
 	if (entry)
 		entry->proc_fops = &proc_wakeups_operations;
+
+	entry = create_proc_entry("wakeup-count", 0, NULL);
+	if (entry)
+		entry->proc_fops = &proc_wakeup_count_operations;
+
+	entry = create_proc_entry("wakeup-last", 0, NULL);
+	if (entry)
+		entry->proc_fops = &proc_wakeup_last_operations;
 
 	return 0;
 }
