@@ -65,7 +65,9 @@ pte_alloc_one_kernel(struct mm_struct *mm, unsigned long addr)
 
 	pte = (pte_t *)__get_free_page(PGALLOC_GFP);
 	if (pte)
+#if !CONFIG_CPU_CACHE_V7		
 		clean_pte_table(pte);
+#endif
 
 	return pte;
 }
