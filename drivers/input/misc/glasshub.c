@@ -1971,6 +1971,12 @@ static ssize_t last_irq_status_show(struct device *dev, struct device_attribute 
 	return sprintf(buf, "0x%02x\n", glasshub->last_irq_status);
 }
 
+/* current timestamp */
+static ssize_t current_timestamp_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	return sprintf(buf, "%llu\n", read_robust_clock());
+}
+
 static DEVICE_ATTR(update_fw_enable, DEV_MODE_RW, update_fw_enable_show, update_fw_enable_store);
 static DEVICE_ATTR(update_fw_data, DEV_MODE_WO, NULL, update_fw_data_store);
 static DEVICE_ATTR(version, DEV_MODE_RO, version_show, NULL);
@@ -2015,6 +2021,7 @@ static DEVICE_ATTR(frame_count, DEV_MODE_RO, frame_count_show, NULL);
 static DEVICE_ATTR(timer_count, DEV_MODE_RO, timer_count_show, NULL);
 static DEVICE_ATTR(irq_timestamp, DEV_MODE_RO, irq_timestamp_show, NULL);
 static DEVICE_ATTR(last_timestamp, DEV_MODE_RO, last_timestamp_show, NULL);
+static DEVICE_ATTR(current_timestamp, DEV_MODE_RO, current_timestamp_show, NULL);
 static DEVICE_ATTR(irq_status, DEV_MODE_RO, irq_status_show, NULL);
 static DEVICE_ATTR(last_irq_status, DEV_MODE_RO, last_irq_status_show, NULL);
 
@@ -2053,6 +2060,7 @@ static struct attribute *attrs[] = {
 	&dev_attr_timer_count.attr,
 	&dev_attr_irq_timestamp.attr,
 	&dev_attr_last_timestamp.attr,
+	&dev_attr_current_timestamp.attr,
 	&dev_attr_irq_status.attr,
 	&dev_attr_last_irq_status.attr,
 	NULL
