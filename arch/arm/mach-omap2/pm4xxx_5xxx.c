@@ -173,6 +173,8 @@ static char *power_state_names[] = {
 	[PWRDM_POWER_OSWR] = "OSWR",
 };
 
+extern void omap_board_suspend_event(void);
+
 static int omap4_5_pm_suspend(void)
 {
 	struct power_state *pwrst;
@@ -211,6 +213,8 @@ static int omap4_5_pm_suspend(void)
 			pwrdm_get_context_loss_count(pwrst->pwrdm);
 		omap_set_pwrdm_state(pwrst->pwrdm, pwrst->next_state);
 	}
+
+	omap_board_suspend_event();
 
 	/*
 	 * For MPUSS to hit power domain retention(CSWR or OSWR),

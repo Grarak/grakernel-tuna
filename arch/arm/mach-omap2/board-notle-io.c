@@ -8,6 +8,7 @@
 #include <linux/module.h>
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
+#include <linux/spinlock.h>
 #include "board-notle.h"
 
 struct omap_pin_stat {
@@ -15,12 +16,18 @@ struct omap_pin_stat {
 	const char *use;
 	bool default_display;
 
-	unsigned long long count;
+	unsigned long count;
+
+	unsigned long wakeup_jiffies;
+	unsigned long long running_jiffies;
 };
 
 struct omap_irq_stat {
 	char name[32];
-	unsigned long long count;
+	unsigned long count;
+
+	unsigned long wakeup_jiffies;
+	unsigned long long running_jiffies;
 };
 
 #define OMAP_IO_STAT(_index, _name, _use, _display) \
@@ -38,8 +45,31 @@ static inline bool is_irq_stat(const void *v)
 		(struct omap_irq_stat *) v <= &notle_irq_stats[NUM_IRQ_STATS - 1];
 }
 
-static unsigned long long wakeup_count;
+static unsigned long wakeup_count;
 static void *last_wakeup;
+
+static DEFINE_SPINLOCK(last_wakeup_lock);
+
+static inline void *get_last_wakeup(void)
+{
+	unsigned long flags;
+	void *ret;
+
+	spin_lock_irqsave(&last_wakeup_lock, flags);
+	ret = last_wakeup;
+	spin_unlock_irqrestore(&last_wakeup_lock, flags);
+
+	return ret;
+}
+
+static inline void set_last_wakeup(void *wakeup)
+{
+	unsigned long flags;
+
+	spin_lock_irqsave(&last_wakeup_lock, flags);
+	last_wakeup = wakeup;
+	spin_unlock_irqrestore(&last_wakeup_lock, flags);
+}
 
 /*
  * Pins corresponding to GPIO blocks 0-6. These are documented in the OMAP44xx TRM
@@ -251,10 +281,11 @@ void omap_board_io_event(int index)
 	if (index < 0 || index >= NUM_IO_STATS)
 		return;
 
+	notle_io_stats[index].wakeup_jiffies = jiffies;
 	notle_io_stats[index].count++;
 	wakeup_count++;
 
-	last_wakeup = &notle_io_stats[index];
+	set_last_wakeup(&notle_io_stats[index]);
 }
 
 void omap_board_wk_event(int index)
@@ -262,10 +293,11 @@ void omap_board_wk_event(int index)
 	if (index < 0 || index >= NUM_WK_STATS)
 		return;
 
+	notle_wk_stats[index].wakeup_jiffies = jiffies;
 	notle_wk_stats[index].count++;
 	wakeup_count++;
 
-	last_wakeup = &notle_wk_stats[index];
+	set_last_wakeup(&notle_wk_stats[index]);
 }
 
 void omap_board_gpio_event(int index)
@@ -281,10 +313,28 @@ void omap_board_irq_event(int index, const char *name)
 	if (name && notle_irq_stats[index].name[0] == 0)
 		strlcpy(notle_irq_stats[index].name, name, sizeof(notle_irq_stats[index].name));
 
+	notle_irq_stats[index].wakeup_jiffies = jiffies;
 	notle_irq_stats[index].count++;
 	wakeup_count++;
 
-	last_wakeup = &notle_irq_stats[index];
+	set_last_wakeup(&notle_irq_stats[index]);
+}
+
+void omap_board_suspend_event(void)
+{
+	void *last = get_last_wakeup();
+
+	if (last) {
+		if (is_irq_stat(last)) {
+			struct omap_irq_stat *s = last;
+
+			s->running_jiffies += jiffies - s->wakeup_jiffies;
+		} else {
+			struct omap_pin_stat *s = last;
+
+			s->running_jiffies += jiffies - s->wakeup_jiffies;
+		}
+	}
 }
 
 static void *pin_for_index(unsigned int index)
@@ -320,21 +370,38 @@ static void *wakeups_next(struct seq_file *m, void *v, loff_t *pos)
 
 static int wakeups_show(struct seq_file *m, void *v)
 {
+	unsigned long long n = 0;
+
 	if (v == SEQ_START_TOKEN) {
-		seq_puts(m, "pin            use            count\n");
+		seq_puts(m, "pin              use              count             active            avg active\n");
 	} else {
 		if (is_irq_stat(v)) {
 			struct omap_irq_stat *s = v;
 
-			if (s->count)
-				seq_printf(m, "%-16s IRQ %-11d %10llu\n",
+			if (s->count) {
+				if (s->count) {
+					n = s->running_jiffies;
+					do_div(n, s->count);
+				}
+
+				seq_printf(m, "%-16s IRQ %-11d %10lu %10u %10u\n",
 						s->name[0] ? s->name : "Unknown",
-						s - notle_irq_stats, s->count);
+						s - notle_irq_stats, s->count, jiffies_to_msecs(s->running_jiffies),
+						jiffies_to_msecs(n));
+			}
 		} else {
 			struct omap_pin_stat *s = v;
 
-			if (s->name != NULL && (s->count || s->default_display))
-				seq_printf(m, "%-16s %-16s %10llu\n", s->name, s->use, s->count);
+			if (s->name != NULL && (s->count || s->default_display)) {
+				if (s->count) {
+					n = s->running_jiffies;
+					do_div(n, s->count);
+				}
+
+				seq_printf(m, "%-16s %-16s %10lu %10u %10u\n",
+						s->name, s->use, s->count, jiffies_to_msecs(s->running_jiffies),
+						jiffies_to_msecs(n));
+			}
 		}
 	}
 
@@ -343,23 +410,38 @@ static int wakeups_show(struct seq_file *m, void *v)
 
 static int wakeup_count_show(struct seq_file *m, void *v)
 {
-	seq_printf(m, "%llu\n", wakeup_count);
+	seq_printf(m, "%lu\n", wakeup_count);
 	return 0;
 }
 
 static int wakeup_last_show(struct seq_file *m, void *v)
 {
-	if (!last_wakeup) {
+	unsigned long long n = 0;
+	void *last = get_last_wakeup();
+
+	if (!last) {
 		seq_printf(m, "None\n");
-	} if (is_irq_stat(last_wakeup)) {
-		struct omap_irq_stat *s = last_wakeup;
+	} else if (is_irq_stat(last)) {
+		struct omap_irq_stat *s = last;
 
-		seq_printf(m, "%s IRQ %d %llu\n", s->name[0] ? s->name : "Unknown",
-				s - notle_irq_stats, s->count);
+		if (s->count) {
+			n = s->running_jiffies;
+			do_div(n, s->count);
+		}
+
+		seq_printf(m, "%s IRQ %d %lu %u %u\n", s->name[0] ? s->name : "Unknown",
+				s - notle_irq_stats, s->count, jiffies_to_msecs(s->running_jiffies),
+				jiffies_to_msecs(n));
 	} else {
-		struct omap_pin_stat *s = last_wakeup;
+		struct omap_pin_stat *s = last;
 
-		seq_printf(m, "%s %s %llu\n", s->name, s->use, s->count);
+		if (s->count) {
+			n = s->running_jiffies;
+			do_div(n, s->count);
+		}
+
+		seq_printf(m, "%s %s %lu %u %u\n", s->name, s->use, s->count,
+				jiffies_to_msecs(s->running_jiffies), jiffies_to_msecs(n));
 	}
 
 	return 0;
