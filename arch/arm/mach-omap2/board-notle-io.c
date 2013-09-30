@@ -19,7 +19,7 @@ struct omap_pin_stat {
 	unsigned long count;
 
 	unsigned long wakeup_jiffies;
-	unsigned long long running_jiffies;
+	unsigned long running_jiffies;
 };
 
 struct omap_irq_stat {
@@ -27,7 +27,7 @@ struct omap_irq_stat {
 	unsigned long count;
 
 	unsigned long wakeup_jiffies;
-	unsigned long long running_jiffies;
+	unsigned long running_jiffies;
 };
 
 #define OMAP_IO_STAT(_index, _name, _use, _display) \
@@ -370,8 +370,6 @@ static void *wakeups_next(struct seq_file *m, void *v, loff_t *pos)
 
 static int wakeups_show(struct seq_file *m, void *v)
 {
-	unsigned long long n = 0;
-
 	if (v == SEQ_START_TOKEN) {
 		seq_puts(m, "pin              use              count             active            avg active\n");
 	} else {
@@ -379,28 +377,18 @@ static int wakeups_show(struct seq_file *m, void *v)
 			struct omap_irq_stat *s = v;
 
 			if (s->count) {
-				if (s->count) {
-					n = s->running_jiffies;
-					do_div(n, s->count);
-				}
-
 				seq_printf(m, "%-16s IRQ %-11d %10lu %10u %10u\n",
 						s->name[0] ? s->name : "Unknown",
 						s - notle_irq_stats, s->count, jiffies_to_msecs(s->running_jiffies),
-						jiffies_to_msecs(n));
+						jiffies_to_msecs(s->running_jiffies / (s->count ? s->count : 1)));
 			}
 		} else {
 			struct omap_pin_stat *s = v;
 
 			if (s->name != NULL && (s->count || s->default_display)) {
-				if (s->count) {
-					n = s->running_jiffies;
-					do_div(n, s->count);
-				}
-
 				seq_printf(m, "%-16s %-16s %10lu %10u %10u\n",
 						s->name, s->use, s->count, jiffies_to_msecs(s->running_jiffies),
-						jiffies_to_msecs(n));
+						jiffies_to_msecs(s->running_jiffies / (s->count ? s->count : 1)));
 			}
 		}
 	}
@@ -416,32 +404,21 @@ static int wakeup_count_show(struct seq_file *m, void *v)
 
 static int wakeup_last_show(struct seq_file *m, void *v)
 {
-	unsigned long long n = 0;
 	void *last = get_last_wakeup();
 
 	if (!last) {
 		seq_printf(m, "None\n");
 	} else if (is_irq_stat(last)) {
 		struct omap_irq_stat *s = last;
-
-		if (s->count) {
-			n = s->running_jiffies;
-			do_div(n, s->count);
-		}
-
 		seq_printf(m, "%s IRQ %d %lu %u %u\n", s->name[0] ? s->name : "Unknown",
 				s - notle_irq_stats, s->count, jiffies_to_msecs(s->running_jiffies),
-				jiffies_to_msecs(n));
+				jiffies_to_msecs(s->running_jiffies / (s->count ? s->count : 1)));
 	} else {
 		struct omap_pin_stat *s = last;
 
-		if (s->count) {
-			n = s->running_jiffies;
-			do_div(n, s->count);
-		}
-
 		seq_printf(m, "%s %s %lu %u %u\n", s->name, s->use, s->count,
-				jiffies_to_msecs(s->running_jiffies), jiffies_to_msecs(n));
+				jiffies_to_msecs(s->running_jiffies),
+				jiffies_to_msecs(s->running_jiffies / (s->count ? s->count : 1)));
 	}
 
 	return 0;
