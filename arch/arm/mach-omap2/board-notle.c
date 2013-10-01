@@ -1196,6 +1196,7 @@ void __init notle_serial_init(void)
 {
 	omap_serial_init_port(&uart1_board_data, &omap_serial_port_info[0]);
 	omap_serial_init_port(&uart2_board_data, &omap_serial_port_info[1]);
+	omap_serial_init_port(&uart3_board_data, &omap_serial_port_info[2]);
 	omap_serial_init_port(&uart4_board_data, &omap_serial_port_info[3]);
 }
 
