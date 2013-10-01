@@ -435,11 +435,11 @@ static int bad_syscall(int n, struct pt_regs *regs)
 	return regs->ARM_r0;
 }
 
-static inline void
+static inline int
 do_cache_op(unsigned long start, unsigned long end, int flags)
 {
 	if (end < start || flags)
-		return;
+		return -EINVAL;
 	return flush_cache_user_range(start, end);
 }
 
@@ -517,7 +517,7 @@ asmlinkage int arm_syscall(int no, struct pt_regs *regs)
 	 * the specified region).
 	 */
 	case NR(cacheflush):
-		do_cache_op(regs->ARM_r0, regs->ARM_r1, regs->ARM_r2);
+		return do_cache_op(regs->ARM_r0, regs->ARM_r1, regs->ARM_r2);
 		return 0;
 
 	case NR(cacheflush_iov):
