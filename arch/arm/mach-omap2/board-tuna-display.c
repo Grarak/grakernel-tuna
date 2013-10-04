@@ -807,9 +807,9 @@ static struct s6e8aa0_factory_calibration_info tuna_oled_factory_info_6500k = {
 		 * maximum brightness down from 300 cd/m2 to 280.
 		 */
 		.mult = {
-			2004318071U,
-			2004318071U,
-			2004318071U,
+			2054318071U,
+			1974318071U,
+			2104318071U,
 		},
 		.rshift = 31,
 	},
