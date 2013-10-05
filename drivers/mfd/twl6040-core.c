@@ -751,7 +751,7 @@ static int __devinit twl6040_probe(struct i2c_client *client,
 	}
 
 	/* dual-access registers controlled by I2C only */
-	twl6040_set_bits(twl6040, TWL6040_REG_ACCCTL, TWL6040_I2CSEL);
+	twl6040_set_bits(twl6040, TWL6040_REG_ACCCTL, TWL6040_I2CSEL | TWL6040_I2CMODE_FAST);
 
 	if (pdata->codec) {
 		twl6040_fill_codec_resources(twl6040);
