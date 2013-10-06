@@ -1173,7 +1173,7 @@ static struct omap_uart_port_info omap_serial_port_info[] __initdata = {
                 .dma_rx_poll_rate = DEFAULT_RXDMA_POLLRATE,
                 .dma_rx_timeout = DEFAULT_RXDMA_TIMEOUT,
                 .autosuspend_timeout = DEFAULT_AUTOSUSPEND_DELAY,
-                //.wake_peer = bcm_bt_lpm_exit_lpm_locked,
+                .wake_peer = bcm_bt_lpm_exit_lpm_locked,
                 .rts_mux_driver_control = 1,
         },
         { /* ttyO2 console port */
@@ -1194,10 +1194,7 @@ static struct omap_uart_port_info omap_serial_port_info[] __initdata = {
 
 void __init notle_serial_init(void)
 {
-	omap_serial_init_port(&uart1_board_data, &omap_serial_port_info[0]);
-	omap_serial_init_port(&uart2_board_data, &omap_serial_port_info[1]);
-	omap_serial_init_port(&uart3_board_data, &omap_serial_port_info[2]);
-	omap_serial_init_port(&uart4_board_data, &omap_serial_port_info[3]);
+	omap_serial_board_init(omap_serial_port_info);
 }
 
 /* Initialize FIQ Debugger */
