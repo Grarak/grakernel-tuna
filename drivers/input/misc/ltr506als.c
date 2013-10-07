@@ -1867,24 +1867,6 @@ static void ltr506_late_resume(struct early_suspend *h)
 		ltr506->ps_suspend_enable_flag = 0;
 	}
 
-	/* Work around to force new values upon resume through the input
-	   subsystem when there is literally no entropy left in our bits. */
-	{
-		uint16_t adc_value;
-		adc_value = read_adc_value(ltr506);
-		if (adc_value == LTR506_ALS_MIN_MEASURE_VAL) {
-			/* Special case to force new value through input
-			   subsystem upon resume. */
-			adc_value = LTR506_ALS_MIN_MEASURE_VAL+1;
-			dev_info(&ltr506->i2c_client->dev,
-			         "%s Detected darkness synthesizing value %d\n",
-			         __func__, adc_value);
-			input_report_abs(ltr506->als_input_dev, ABS_MISC,
-			                 adc_value);
-			input_sync(ltr506->als_input_dev);
-		}
-	}
-
 	if (ret) {
 		dev_err(&ltr506->i2c_client->dev, "%s Unable to complete resume\n", __func__);
 	} else {
