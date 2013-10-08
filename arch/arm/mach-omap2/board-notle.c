@@ -2421,12 +2421,12 @@ static void __init notle_reserve(void)
             h->size = ion_heap_secure_input_size;
             break;
         case OMAP_ION_HEAP_NONSECURE_TILER:
-            h->base = ion_heap_tiler_addr;
-            h->size = ion_heap_tiler_size;
-            break;
-        case OMAP_ION_HEAP_TILER:
             h->base = ion_heap_nonsecure_tiler_addr;
             h->size = ion_heap_nonsecure_tiler_size;
+            break;
+        case OMAP_ION_HEAP_TILER:
+            h->base = ion_heap_tiler_addr;
+            h->size = ion_heap_tiler_size;
             break;
         default:
             break;
