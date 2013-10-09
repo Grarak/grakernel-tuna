@@ -82,6 +82,8 @@ struct ltr506_data {
 	/* Flag to suspend ALS on suspend or not */
 	int disable_als_on_suspend;
 	int als_filter_interrupts;
+	uint16_t als_last_value;
+	int als_from_suspend;
 
 	/* PS */
 	int ps_enable_flag;
@@ -461,6 +463,14 @@ static void report_als_input_event(struct ltr506_data *ltr506)
 	} else {
 		adc_value = read_adc_value(ltr506);
 	}
+
+	if (ltr506->als_from_suspend && (ltr506->als_last_value == adc_value)) {
+		adc_value = ltr506->als_last_value ^ 0x0001;
+		dev_info(&ltr506->i2c_client->dev, "%s Flipping lsb to force fresh value through input subsystem value:%d\n",
+		         __func__, adc_value);
+	}
+	ltr506->als_from_suspend = 0;
+	ltr506->als_last_value = adc_value;
 
 	input_report_abs(ltr506->als_input_dev, ABS_MISC, adc_value);
 	input_sync(ltr506->als_input_dev);
@@ -1854,6 +1864,8 @@ static void ltr506_late_resume(struct early_suspend *h)
 		return;
 	}
 	ltr506->is_suspend = 0;
+
+	ltr506->als_from_suspend = 1;
 
 	/* If ALS was enbled before suspend, enable during resume */
 	if (ltr506->disable_als_on_suspend && ltr506->als_suspend_enable_flag) {
