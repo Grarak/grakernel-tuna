@@ -373,7 +373,6 @@ static int omap_abe_av_switch_event(struct snd_soc_dapm_widget *w,
 	return ret;
 }
 
-#if 0
 static int omap_abe_get_power_mode(struct snd_kcontrol *kcontrol,
 	struct snd_ctl_elem_value *ucontrol)
 {
@@ -410,7 +409,6 @@ static const struct snd_kcontrol_new omap_abe_controls[] = {
 	SOC_ENUM_EXT("TWL6040 Power Mode", omap_abe_enum[0],
 		omap_abe_get_power_mode, omap_abe_set_power_mode),
 };
-#endif
 
 /* OMAP ABE TWL6040 machine DAPM */
 static const struct snd_soc_dapm_widget twl6040_dapm_widgets[] = {
@@ -608,6 +606,8 @@ static int omap_abe_twl6040_init(struct snd_soc_pcm_runtime *rtd)
 		else
 			snd_soc_jack_report(&hs_jack, SND_JACK_HEADSET, SND_JACK_HEADSET);
 	}
+
+	snd_soc_add_card_controls(card, omap_abe_controls, ARRAY_SIZE(omap_abe_controls));
 
 	return ret;
 }
