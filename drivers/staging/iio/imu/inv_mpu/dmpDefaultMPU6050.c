@@ -148,7 +148,7 @@
 #define D_GLU_LPF_GAIN          (45 * 16 + 8)
 #define D_GLU_ONE_MINUS_LPF_GAIN (45 * 16 + 12)
 #define D_GLU_ROLL_THRESHOLD    (46 * 16 + 12)
-// new data for spec v4
+
 #define D_GLU_GYRO_BIAS_LPF_GAIN              (60 * 16 + 4)
 #define D_GLU_ONE_MINUS_GYRO_BIAS_LPF_GAIN    (60 * 16 + 8)
 #define D_GLU_RELATIVE_LOOK_UP_LEAK_GAIN      (56 * 16 + 8)
@@ -183,21 +183,11 @@
 #define D_HOST_NO_MOT          (976)
 
 static const struct tKeyLabel dmpTConfig[] = {
-	//{KEY_GLU_CHECK_STATE_1,         GLU_CHECK_STATE_1},
-	//{KEY_GLU_CHECK_STATE_0,         GLU_CHECK_STATE_0},
-	//{KEY_GLU_CHECK_STATE_2,         GLU_CHECK_STATE_2},
 	{KEY_CFG_27,                    CFG_27},
 	{KEY_CFG_20,                    CFG_20},
 	{KEY_CFG_23,                    CFG_23},
 	{KEY_CFG_FIFO_ON_EVENT,         CFG_FIFO_ON_EVENT},
 	{KEY_CFG_ORIENT_IRQ_1,          CFG_ORIENT_IRQ_1},
-	/*{KEY_GLU_END_1,                 GLU_END_1},
-	{KEY_GLU_END_2,                 GLU_END_2},
-	{KEY_GLU_END_3,                 GLU_END_3},
-	{KEY_GLU_END_4,                 GLU_END_4},
-	{KEY_GLU_STATE_0,               GLU_STATE_0},
-	{KEY_GLU_STATE_1,               GLU_STATE_1},
-	{KEY_GLU_STATE_2,               GLU_STATE_2},*/
 	{KEY_X_GRT_Y_TMP,               X_GRT_Y_TMP},
 	{KEY_CFG_DR_INT,                CFG_DR_INT},
 	{KEY_CFG_AUTH,                  CFG_AUTH},
@@ -220,7 +210,6 @@ static const struct tKeyLabel dmpTConfig[] = {
 	{KEY_END_COMPARE_Y_X,           END_COMPARE_Y_X},
 	{KEY_CFG_LP_QUAT,               CFG_LP_QUAT},
 	{KEY_END_ORIENT,                END_ORIENT},
-	//{KEY_CFG_FLICK_IN,              CFG_FLICK_IN},
 	{KEY_CFG_7,                     CFG_7},
 	{KEY_CFG_MOTION_BIAS,           CFG_MOTION_BIAS},
 	{KEY_X_GRT_Y,                   X_GRT_Y},
@@ -255,7 +244,7 @@ static const struct tKeyLabel dmpTConfig[] = {
 	{KEY_DMP_SH_TH_X,           DMP_SH_TH_X},
 	{KEY_DMP_SH_TH_Z,           DMP_SH_TH_Z},
 	{KEY_DMP_ORIENT,            DMP_ORIENT},
-	{KEY_D_AUTH_OUT,            D_AUTH_OUT},              
+	{KEY_D_AUTH_OUT,            D_AUTH_OUT},
 	{KEY_D_AUTH_IN,             D_AUTH_IN},
 	{KEY_D_AUTH_A,              D_AUTH_A},
 	{KEY_D_AUTH_B,              D_AUTH_B},
@@ -285,14 +274,15 @@ static const struct tKeyLabel dmpTConfig[] = {
 	{KEY_D_GLU_LPF_GAIN,                  D_GLU_LPF_GAIN},
 	{KEY_D_GLU_ONE_MINUS_LPF_GAIN,        D_GLU_ONE_MINUS_LPF_GAIN},
 	{KEY_D_GLU_ROLL_THRESHOLD,          D_GLU_ROLL_THRESHOLD},
-	// new keys for spec 4
-	{KEY_D_GLU_GYRO_BIAS_LPF_GAIN,                    D_GLU_GYRO_BIAS_LPF_GAIN},
-	{KEY_D_GLU_ONE_MINUS_GYRO_BIAS_LPF_GAIN,          D_GLU_ONE_MINUS_GYRO_BIAS_LPF_GAIN},
-	{KEY_D_GLU_RELATIVE_LOOK_UP_LEAK_GAIN,            D_GLU_RELATIVE_LOOK_UP_LEAK_GAIN},
-	{KEY_D_GLU_RELATIVE_ANGLE_THRESHOLD,              D_GLU_RELATIVE_ANGLE_THRESHOLD},
-	{KEY_D_GLU_HORIZONTAL_THRESHOLD_SQUARED,          D_GLU_HORIZONTAL_THRESHOLD_SQUARED},
+	{KEY_D_GLU_GYRO_BIAS_LPF_GAIN, D_GLU_GYRO_BIAS_LPF_GAIN},
+	{KEY_D_GLU_ONE_MINUS_GYRO_BIAS_LPF_GAIN,
+					D_GLU_ONE_MINUS_GYRO_BIAS_LPF_GAIN},
+	{KEY_D_GLU_RELATIVE_LOOK_UP_LEAK_GAIN,
+					D_GLU_RELATIVE_LOOK_UP_LEAK_GAIN},
+	{KEY_D_GLU_RELATIVE_ANGLE_THRESHOLD, D_GLU_RELATIVE_ANGLE_THRESHOLD},
+	{KEY_D_GLU_HORIZONTAL_THRESHOLD_SQUARED,
+					D_GLU_HORIZONTAL_THRESHOLD_SQUARED},
 	{KEY_D_GLU_VERSION,                               D_GLU_VERSION},
-	// end new keys for spec 4
 	{KEY_D_PEDSTD_BP_B, D_PEDSTD_BP_B},
 	{KEY_D_PEDSTD_HP_A, D_PEDSTD_HP_A},
 	{KEY_D_PEDSTD_HP_B, D_PEDSTD_HP_B},

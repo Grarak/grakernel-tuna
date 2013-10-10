@@ -360,7 +360,6 @@ static irqreturn_t inv_irq_handler(int irq, void *dev_id)
 	catch_up = 0;
 	while ((time_since_last_irq > st->irq_dur_ns * 2) &&
 	       (catch_up < MAX_CATCH_UP) &&
-	       (!st->chip_config.lpa_mode) &&
 	       (!st->chip_config.dmp_on)) {
 		st->last_isr_time += st->irq_dur_ns;
 		kfifo_in(&st->timestamps,
@@ -620,7 +619,7 @@ static int inv_report_gyro_accl_compass(struct iio_dev *indio_dev,
 			compass_divider = st->compass_dmp_divider;
 		else
 			compass_divider = st->compass_divider;
-		if (compass_divider == st->compass_counter) {
+		if (compass_divider <= st->compass_counter) {
 			/*read from external sensor data register */
 			result = inv_i2c_read(st, REG_EXT_SENS_DATA_00,
 					      NUM_BYTES_COMPASS_SLAVE, d);
@@ -708,7 +707,9 @@ irqreturn_t inv_read_fifo(int irq, void *dev_id)
 	struct inv_reg_map_s *reg;
 	s64 buf[8];
 	unsigned char *tmp;
+
 	reg = &st->reg;
+	mutex_lock(&st->suspend_resume_lock);
 	if (!(st->chip_config.accl_fifo_enable |
 		st->chip_config.gyro_fifo_enable |
 		st->chip_config.dmp_on |
@@ -721,15 +722,6 @@ irqreturn_t inv_read_fifo(int irq, void *dev_id)
 			sysfs_notify(&indio_dev->dev.kobj, NULL, "event_glu");
 			inv_clear_GLU_int_flag(st);
 		}
-	}
-	if (st->chip_config.lpa_mode) {
-		result = inv_i2c_read(st, reg->raw_accl,
-				      BYTES_PER_SENSOR, data);
-		if (result)
-			goto end_session;
-		inv_report_gyro_accl_compass(indio_dev, data,
-					     get_time_ns());
-		goto end_session;
 	}
 
 	if (st->chip_config.dmp_on)
@@ -789,14 +781,19 @@ irqreturn_t inv_read_fifo(int irq, void *dev_id)
 		inv_report_gyro_accl_compass(indio_dev, data, timestamp);
 		fifo_count -= bytes_per_datum;
 	}
-	if (bytes_per_datum == 0)
+	if (bytes_per_datum == 0 && st->chip_config.compass_fifo_enable)
 		inv_report_gyro_accl_compass(indio_dev, data, timestamp);
+
 end_session:
+	mutex_unlock(&st->suspend_resume_lock);
+
 	return IRQ_HANDLED;
 flush_fifo:
 	/* Flush HW and SW FIFOs. */
 	inv_reset_fifo(indio_dev);
 	inv_clear_kfifo(st);
+	mutex_unlock(&st->suspend_resume_lock);
+
 	return IRQ_HANDLED;
 }
 

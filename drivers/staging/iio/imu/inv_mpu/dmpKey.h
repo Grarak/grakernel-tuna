@@ -157,7 +157,7 @@
 #define KEY_D_GYRO_BIAS_Z               (KEY_D_GYRO_BIAS_Y + 1)
 #define KEY_D_GYRO_ENABLE               (KEY_D_GYRO_BIAS_Z + 1)
 #define KEY_D_ACCEL_ENABLE              (KEY_D_GYRO_ENABLE + 1)
-#define KEY_D_QUAT_ENABLE               (KEY_D_ACCEL_ENABLE +1)
+#define KEY_D_QUAT_ENABLE               (KEY_D_ACCEL_ENABLE + 1)
 #define KEY_D_OUTPUT_ENABLE             (KEY_D_QUAT_ENABLE + 1)
 #define KEY_D_CR_TIME_G                 (KEY_D_OUTPUT_ENABLE + 1)
 #define KEY_D_CR_TIME_A                 (KEY_D_CR_TIME_G + 1)
@@ -226,16 +226,19 @@
 #define KEY_D_GLU_LPF_GAIN           (KEY_D_GLU_TRIGGER_THRESHOLD + 1)
 #define KEY_D_GLU_ONE_MINUS_LPF_GAIN (KEY_D_GLU_LPF_GAIN + 1)
 #define KEY_D_GLU_ROLL_THRESHOLD     (KEY_D_GLU_ONE_MINUS_LPF_GAIN + 1)
-// new keys for spec v4
-#define KEY_D_GLU_GYRO_BIAS_LPF_GAIN                 (KEY_D_GLU_ROLL_THRESHOLD + 1)
-#define KEY_D_GLU_ONE_MINUS_GYRO_BIAS_LPF_GAIN       (KEY_D_GLU_GYRO_BIAS_LPF_GAIN + 1)
-#define KEY_D_GLU_RELATIVE_LOOK_UP_LEAK_GAIN         (KEY_D_GLU_ONE_MINUS_GYRO_BIAS_LPF_GAIN + 1)
-#define KEY_D_GLU_RELATIVE_ANGLE_THRESHOLD           (KEY_D_GLU_RELATIVE_LOOK_UP_LEAK_GAIN + 1)
-#define KEY_D_GLU_HORIZONTAL_THRESHOLD_SQUARED       (KEY_D_GLU_RELATIVE_ANGLE_THRESHOLD + 1)
-#define KEY_D_GLU_VERSION                            (KEY_D_GLU_HORIZONTAL_THRESHOLD_SQUARED + 1)
+
+#define KEY_D_GLU_GYRO_BIAS_LPF_GAIN (KEY_D_GLU_ROLL_THRESHOLD + 1)
+#define KEY_D_GLU_ONE_MINUS_GYRO_BIAS_LPF_GAIN \
+				(KEY_D_GLU_GYRO_BIAS_LPF_GAIN + 1)
+#define KEY_D_GLU_RELATIVE_LOOK_UP_LEAK_GAIN \
+				(KEY_D_GLU_ONE_MINUS_GYRO_BIAS_LPF_GAIN + 1)
+#define KEY_D_GLU_RELATIVE_ANGLE_THRESHOLD \
+				(KEY_D_GLU_RELATIVE_LOOK_UP_LEAK_GAIN + 1)
+#define KEY_D_GLU_HORIZONTAL_THRESHOLD_SQUARED \
+				(KEY_D_GLU_RELATIVE_ANGLE_THRESHOLD + 1)
+#define KEY_D_GLU_VERSION (KEY_D_GLU_HORIZONTAL_THRESHOLD_SQUARED + 1)
 
 /* Authenticate Keys */
-//#define KEY_D_AUTH_OUT              (KEY_X_GRT_Y_TMP2 + 1)
 #define KEY_D_AUTH_OUT              (KEY_D_GLU_VERSION + 1)
 #define KEY_D_AUTH_IN               (KEY_D_AUTH_OUT + 1)
 #define KEY_D_AUTH_A                (KEY_D_AUTH_IN + 1)
@@ -265,7 +268,6 @@
 /*Host Based No Motion*/
 #define KEY_D_HOST_NO_MOT           (KEY_D_PEDSTD_DECI + 1)
 
-//#define NUM_KEYS                    (KEY_STREAM_P_ACCEL_Z + 1)
 #define NUM_KEYS                    (KEY_D_HOST_NO_MOT + 1)
 
 struct tKeyLabel  {
@@ -372,8 +374,6 @@ struct tKeyLabel  {
 #define DINA91 0x91
 #define DINAB6 0xb6
 #define DINAB4 0xb4
-
-
 #define DINC00 0x00
 #define DINC01 0x01
 #define DINC02 0x02
@@ -407,7 +407,6 @@ struct tKeyLabel  {
 #define DINC39 0x39
 #define DINC3A 0x3a
 #define DINC3B 0x3b
-
 #define DINC40 0x40
 #define DINC41 0x41
 #define DINC42 0x42
@@ -424,7 +423,6 @@ struct tKeyLabel  {
 #define DINC59 0x59
 #define DINC5A 0x5a
 #define DINC5B 0x5b
-
 #define DINC60 0x60
 #define DINC61 0x61
 #define DINC62 0x62
@@ -457,7 +455,6 @@ struct tKeyLabel  {
 #define DINADD 0xdd
 #define DINAF8 0xf0
 #define DINAFE 0xfe
-
 #define DINBF8 0xf8
 #define DINAC0 0xb0
 #define DINAC1 0xb1

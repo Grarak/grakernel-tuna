@@ -13,7 +13,6 @@ config ADIS16400
 	  adis16350, adis16354, adis16355, adis16360, adis16362, adis16364,
 	  adis16365, adis16400 and adis16405 triaxial inertial sensors
 	  (adis16400 series also have magnetometers).
-
-source "drivers/staging/iio/imu/mpu/Kconfig"
-
 endmenu
+
+source "drivers/staging/iio/imu/inv_mpu/Kconfig"

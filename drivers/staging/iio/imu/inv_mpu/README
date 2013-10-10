@@ -65,7 +65,7 @@ static struct mpu_platform_data gyro_platform_data = {
 For MPU9150, the secondary i2c bus address must be filled as below.
 static struct mpu_platform_data gyro_platform_data = {
 	.int_config  = 0x10,
-	.level_shifter = 0,
+	.level_shifter = 1,
 	.orientation = {  -1,  0,  0,
 			   0,  1,  0,
 			   0,  0, -1 },
@@ -161,9 +161,9 @@ Check which clock-source is used by the chip.
 power_state (Read/write)
 turn on/off the power supply
 
-self_test (Read/write)
-Write to this entry to trigger self test. Read to get result of self test.
-The return value is D. D is the success/fail.
+self_test (read-only)
+read this entry trigger self test. The return value is D.
+D is the success/fail.
 For different chip, the result is different for success/fail.
 1 means success 0 means fail. The LSB of D is for gyro; the bit
 next to LSB of D is for accel. The bit 2 of D is for compass result.
@@ -214,11 +214,6 @@ dmp_firmware (write only binary file)
 This is the entry that firmware code is loaded into. If the action is succeful,
 firmware_loaded will be updated as 1. In order to load new firmware,
 firmware_loaded flag should be set 0.
-
-lpa_mode(read-write)
-Low power  accelerometer mode
-lpa_freq(read-write)
-low power acceleromter frequency.
 
 accel_matrix
 orient matrix for accel
@@ -272,13 +267,6 @@ It has every entry ITG3500 has and has two addiontal entries.
 accl_matrix
 accl_enable
 ----------------------------------------------------------------------------------
-low power accelerometer mode
-Lower power accelerometer mode is a special mode. It works only for accelerometer.
-It has two entries, lpa_mode and lpa_freq. Only MPU6050 and MPU9150 has this mode.
-To run low power accel mode, set lpa_mode to 1, set lpa_freq to 0~3, which corresponds
-to 1.25Hz, 5Hz, 20Hz, 40Hz. "gyro_enable" and "compass_enable" must be zero. "dmp_on"
-must be zero.
------------------------------------------------------------------------------------
 dmp event.
 dmp event is event out by the DMP unit inside MPU. Only MPU6050 and MPU9150 supports this.
 There are four sysfs entreis, event_flick, event_tap and event_orientation and

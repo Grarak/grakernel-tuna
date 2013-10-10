@@ -769,7 +769,7 @@ int inv_do_test(struct inv_mpu_iio_s *st, int self_test_flag,
  *  inv_recover_setting() recover the old settings after everything is done
  */
 
-void   inv_recover_setting(struct inv_mpu_iio_s *st)
+static void   inv_recover_setting(struct inv_mpu_iio_s *st)
 {
 	struct inv_reg_map_s *reg;
 	int data;
@@ -900,7 +900,7 @@ int inv_hw_self_test(struct inv_mpu_iio_s *st)
 	int accl_bias_st[THREE_AXIS], accl_bias_regular[THREE_AXIS];
 	int test_times;
 	char compass_result, accel_result, gyro_result;
-	if (st->chip_config.is_asleep || st->chip_config.lpa_mode) {
+	if (st->chip_config.is_asleep) {
 		result = inv_power_up_self_test(st);
 		if (result)
 			return result;

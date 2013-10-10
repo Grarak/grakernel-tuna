@@ -25,3 +25,4 @@ config SENSORS_HMC5843
 	  will be called hmc5843
 
 endmenu
+

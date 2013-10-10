@@ -120,7 +120,6 @@ struct inv_hw_s {
  *  @lpf:		Digital low pass filter frequency.
  *  @accl_fs:		accel full scale range.
  *  @self_test_run_once flag for self test run ever.
- *  @self_test_result:	result of last self_test
  *  @has_footer:	MPU3050 specific work around.
  *  @has_compass:	has compass or not.
  *  @enable:		master enable to enable output
@@ -136,12 +135,10 @@ struct inv_hw_s {
  *  @dmp_event_int_on:  dmp event interrupt on/off.
  *  @orientation_on:	dmp is on/off.
  *  @firmware_loaded:	flag indicate firmware loaded or not.
- *  @lpa_mod:		low power mode.
  *  @tap_on:		tap on/off.
  *  @quaternion_on:	send quaternion data on/off.
  *  @display_orient_on:	display orientation on/off.
  *  @normal_compass_measure: discard first compass data after reset.
- *  @lpa_freq:		low power frequency
  *  @prog_start_addr:	firmware program start address.
  *  @dmp_output_rate:   dmp output rate.
  *  @fifo_rate:		FIFO update rate.
@@ -151,7 +148,6 @@ struct inv_chip_config_s {
 	u32 lpf:3;
 	u32 accl_fs:2;
 	u32 self_test_run_once:1;
-	u32 self_test_result:3;
 	u32 has_footer:1;
 	u32 has_compass:1;
 	u32 enable:1;
@@ -167,13 +163,11 @@ struct inv_chip_config_s {
 	u32 dmp_event_int_on:1;
 	u32 orientation_on:1;
 	u32 firmware_loaded:1;
-	u32 lpa_mode:1;
 	u32 tap_on:1;
 	u32 quaternion_on:1;
 	u32 display_orient_on:1;
 	u32 normal_compass_measure:1;
 	u32 glu_version4_on:1;
-	u16 lpa_freq;
 	u16  prog_start_addr;
 	u16 fifo_rate;
 	u16 dmp_output_rate;
@@ -238,6 +232,7 @@ struct inv_mpu_slave;
  *  @hw:		Other hardware-specific information.
  *  @chip_type:		chip type.
  *  @time_stamp_lock:	spin lock to time stamp.
+ *  @suspend_resume_lock: mutex lock for suspend/resume.
  *  @client:		i2c client handle.
  *  @plat_data:		platform data.
  *  @mpu_slave:		mpu slave handle.
@@ -283,6 +278,7 @@ struct inv_mpu_iio_s {
 	const struct inv_hw_s *hw;
 	enum   inv_devices chip_type;
 	spinlock_t time_stamp_lock;
+	struct mutex suspend_resume_lock;
 	struct i2c_client *client;
 	struct mpu_platform_data plat_data;
 	struct inv_mpu_slave *mpu_slave;
@@ -484,7 +480,6 @@ struct inv_mpu_slave {
 #define BIT_PWR_GYRO_X_ON               0x03
 #define BIT_PWR_GYRO_Y_ON               0x05
 #define BIT_PWR_GYRO_Z_ON               0x06
-#define BIT_LPA_FREQ			0xC0
 
 #define REG_BANK_SEL            0x6D
 #define REG_MEM_START_ADDR      0x6E
@@ -534,12 +529,9 @@ struct inv_mpu_slave {
 #define MPU6050_TEMP_OFFSET	 2462307L
 #define MPU6050_TEMP_SCALE       2977653L
 #define MPU_TEMP_SHIFT           16
-#define LPA_FREQ_SHIFT           6
 #define COMPASS_RATE_SCALE       10
 #define MAX_GYRO_FS_PARAM        3
 #define MAX_ACCL_FS_PARAM        3
-#define MAX_LPA_FREQ_PARAM       3
-#define MAX_6500_LPA_FREQ_PARAM  11
 #define THREE_AXIS               3
 #define GYRO_CONFIG_FSR_SHIFT    3
 #define ACCL_CONFIG_FSR_SHIFT    3
@@ -707,8 +699,6 @@ enum MPU_IIO_ATTR_ADDR {
 	ATTR_DMP_ORIENTATION_ON,
 	ATTR_DMP_QUATERNION_ON,
 	ATTR_DMP_DISPLAY_ORIENTATION_ON,
-	ATTR_LPA_MODE,
-	ATTR_LPA_FREQ,
 	ATTR_SELF_TEST,
 	ATTR_KEY,
 	ATTR_GYRO_MATRIX,
