@@ -2405,7 +2405,7 @@ static void __init notle_reserve(void)
     printk("IPU Heap               : 0x%08x Size: (%08x) \n", ipu_heap_addr, ipu_heap_size);
 #endif
 #ifdef CONFIG_OMAP_REMOTEPROC_DSP
-    printk("DSP Heap               : 0x%08x Size: (%08x) \n", dsp_heap_addr, dsp_heap_addr);
+    printk("DSP Heap               : 0x%08x Size: (%08x) \n", dsp_heap_addr, dsp_heap_size);
 #endif
     printk("Tiler Addr             : 0x%08x Size: (%08x) \n", ion_heap_tiler_addr, ion_heap_tiler_size);
     printk("Tiler non-secure addr  : 0x%08x Size: (%08x) \n", ion_heap_nonsecure_tiler_addr, ion_heap_nonsecure_tiler_size);
