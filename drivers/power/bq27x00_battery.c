@@ -55,7 +55,7 @@
 
 #define INVALID_REG_ADDR		0xFF
 
-#define DEBUG_1HZ_COUNT			15
+#define DEBUG_1HZ_MAX_COUNT			15
 
 #define SYSDOWN_BIT             (1<<1)
 
@@ -290,9 +290,9 @@ struct bq27x00_device_info {
 
 	struct bq27x00_access_methods bus;
 
-	struct bq27x00_debug_info debug_info[DEBUG_1HZ_COUNT];
+	struct bq27x00_debug_info debug_info[DEBUG_1HZ_MAX_COUNT];
 	int debug_index;
-	int debug_enable;
+	int debug_print_interval;
 
 	struct bq27x00_partial_data_flash partial_df;
 
@@ -576,9 +576,9 @@ static void bq27x00_update(struct bq27x00_device_info *di)
 	}
 
 	/*
-	 * For debugging use if debug_enable is set.
+	 * For debugging use if debug_print_interval is non zero.
 	 */
-	if (di->debug_enable > 0) {
+	if (di->debug_print_interval > 0) {
 		int count;
 		char dr_buf[200];
 
@@ -1034,7 +1034,6 @@ static void bq27x00_battery_debug_poll(struct work_struct *work)
 	union power_supply_propval val;
 	struct timespec ts;
 	int i;
-	bool first_sample;
 	struct timespec first_ts,time_diff;
 
 	struct bq27x00_device_info *di =
@@ -1059,15 +1058,16 @@ static void bq27x00_battery_debug_poll(struct work_struct *work)
 	/* Record Time */
 	di->debug_info[di->debug_index].timestamp = ts;
 
-	if (di->debug_enable > 0)
+	if (di->debug_print_interval > 0)
 		schedule_delayed_work(&di->debug_work, HZ);
 
 	/* Dumps out 1HZ recording of V, I and T at fixed interval */
-	if (di->debug_enable > 0 && di->debug_index == DEBUG_1HZ_COUNT-1) {
+	if (di->debug_print_interval > 0 &&
+	    di->debug_index >= di->debug_print_interval-1) {
 		int buffer_used = 0;
-		first_sample = true;
-
-		for (i = 0; i < DEBUG_1HZ_COUNT; i++) {
+		const int num_samples = di->debug_index + 1;
+		bool first_sample = true;
+		for (i = 0; i < num_samples; i++) {
 			if (first_sample) {
 				buffer_used += scnprintf(
 				    debug_1hz_buffer+buffer_used,
@@ -1139,7 +1139,7 @@ static int bq27x00_powersupply_init(struct bq27x00_device_info *di)
 	dev_info(di->dev, "support ver. %s enabled\n", DRIVER_VERSION);
 
 	/* If debug is enabled, force a DR and DF dump on boot */
-	if (di->debug_enable)
+	if (di->debug_print_interval > 0)
 		di->data_flash_update_time = jiffies;
 
 	bq27x00_update(di);
@@ -1799,16 +1799,15 @@ static ssize_t show_battery_details(struct device *dev,
 	return count;
 }
 
-
-static ssize_t show_debug_enable(struct device *dev,
+static ssize_t show_debug_print_interval(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
 	struct bq27x00_device_info *di = dev_get_drvdata(dev);
 
-	return sprintf(buf, "%d\n",di->debug_enable);
+	return sprintf(buf, "%d\n",di->debug_print_interval);
 }
 
-static ssize_t set_debug_enable(struct device *dev,
+static ssize_t set_debug_print_interval(struct device *dev,
 		struct device_attribute *attr,
 		const char *buf, size_t count)
 {
@@ -1818,9 +1817,11 @@ static ssize_t set_debug_enable(struct device *dev,
 	if (strict_strtol(buf, 10, &val) < 0)
 		return -EINVAL;
 
-	di->debug_enable = !!val;
+	if (val < 0 || val > DEBUG_1HZ_MAX_COUNT) return -EINVAL;
+	di->debug_print_interval = val;
+	di->debug_index = 0;
 
-	if (di->debug_enable)
+	if (di->debug_print_interval)
 		schedule_delayed_work(&di->debug_work, 0);
 
 	return count;
@@ -1836,7 +1837,8 @@ static DEVICE_ATTR(reset, S_IRUGO, show_reset, NULL);
 static DEVICE_ATTR(qpassed, S_IRUGO, show_qpassed, NULL);
 static DEVICE_ATTR(qpassed_hires, S_IRUGO, show_hires_qpassed, NULL);
 static DEVICE_ATTR(battery_details, S_IRUGO, show_battery_details, NULL);
-static DEVICE_ATTR(debug_enable, S_IWUSR|S_IRUGO, show_debug_enable, set_debug_enable);
+static DEVICE_ATTR(debug_print_interval, S_IWUSR|S_IRUGO,
+		   show_debug_print_interval, set_debug_print_interval);
 
 static struct attribute *bq27x00_attributes[] = {
 	&dev_attr_dump_partial_data_flash.attr,
@@ -1848,7 +1850,7 @@ static struct attribute *bq27x00_attributes[] = {
 	&dev_attr_qpassed.attr,
 	&dev_attr_qpassed_hires.attr,
 	&dev_attr_battery_details.attr,
-	&dev_attr_debug_enable.attr,
+	&dev_attr_debug_print_interval.attr,
 	NULL
 };
 
@@ -1916,7 +1918,8 @@ static int bq27x00_battery_probe(struct i2c_client *client,
 	di->bat.name = name;
 	di->bus.read = &bq27x00_read_i2c;
 	di->bus.write = &bq27x00_write_i2c;
-	di->debug_enable = 1;
+	di->debug_print_interval = DEBUG_1HZ_MAX_COUNT;
+	di->debug_index = 0;
 
 	if (pdata && pdata->translate_temp)
 		di->translate_temp = pdata->translate_temp;
@@ -1959,7 +1962,7 @@ static int bq27x00_battery_probe(struct i2c_client *client,
 	 * 2) Dump partial dataflash at debug_dataflash_interval
 	 * 3) Dump additional data ram
 	 */
-	if (di->debug_enable) {
+	if (di->debug_print_interval) {
 		schedule_delayed_work(&di->debug_work, 0);
 		di->data_flash_update_time =
 			jiffies + msecs_to_jiffies(debug_dataflash_interval);
@@ -2039,7 +2042,7 @@ static int bq27x00_battery_suspend_resume(struct i2c_client *client, const char 
 
 	ret = bq27x00_battery_dump_qpassed(di, buf, sizeof(buf));
 
-	if (di->debug_enable > 0) {
+	if (di->debug_print_interval > 0) {
 		if (suspend_resume == SUSPEND_STR)
 			cancel_delayed_work_sync(&di->work);
 		else if (suspend_resume == RESUME_STR)
