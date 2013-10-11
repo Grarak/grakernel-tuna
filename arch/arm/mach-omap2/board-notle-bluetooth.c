@@ -27,6 +27,7 @@
 #include <linux/rfkill.h>
 #include <linux/platform_device.h>
 #include <linux/wakelock.h>
+#include <linux/suspend.h>
 #include <asm/mach-types.h>
 #include <plat/serial.h>
 #include "board-notle.h"
@@ -62,6 +63,8 @@ struct bcm_bt_lpm {
 
 	struct wake_lock wake_lock;
 	char wake_lock_name[100];
+
+	int suspend_since_last_sniff;
 } bt_lpm;
 
 static int bcm4330_bt_rfkill_set_power(void *data, bool blocked)
@@ -180,6 +183,33 @@ static irqreturn_t host_wake_isr(int irq, void *dev)
 	return IRQ_HANDLED;
 }
 
+
+extern void hci_sniff_all_conns(void);
+
+static int hci_suspend_prepare_notifier(struct notifier_block *unused0,
+				 unsigned long event, void *unused1)
+{
+	if (event == PM_SUSPEND_PREPARE) {
+		/* ensure we don't indefinitely block suspend by only
+		 * allowing one instance of extending the wakelock per
+		 * suspend/resume cycle */
+		if (!bt_lpm.suspend_since_last_sniff)
+			return 0;
+
+		bt_lpm.suspend_since_last_sniff = 0;
+		/* Take the wake lock long enough for the HCI tasklet
+		 * to send our sniff request packet */
+		wake_lock_timeout(&bt_lpm.wake_lock, HZ/2);
+		hci_sniff_all_conns();
+	}
+	return 0;
+}
+
+static void sniff_init(void)
+{
+	pm_notifier(hci_suspend_prepare_notifier, 0);
+}
+
 static int bcm_bt_lpm_init(struct platform_device *pdev)
 {
 	int irq;
@@ -277,6 +307,8 @@ static int bcm4330_bluetooth_probe(struct platform_device *pdev)
 	rfkill_set_states(bt_rfkill, true, false);
 	bcm4330_bt_rfkill_set_power(NULL, true);
 
+	sniff_init();
+
 	ret = bcm_bt_lpm_init(pdev);
 	if (ret) {
 		rfkill_unregister(bt_rfkill);
@@ -323,6 +355,9 @@ int bcm4330_bluetooth_suspend(struct platform_device *pdev, pm_message_t state)
 int bcm4330_bluetooth_resume(struct platform_device *pdev)
 {
 	int irq = gpio_to_irq(BT_HOST_WAKE_GPIO);
+
+	bt_lpm.suspend_since_last_sniff = 1;
+
 	enable_irq(irq);
 	return 0;
 }
