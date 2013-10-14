@@ -120,7 +120,7 @@ static int twl6040_set_pll_input(struct twl6040 *twl6040, int pll_id, int on)
 /* twl6040 codec manual power-up sequence */
 static int twl6040_power_up(struct twl6040 *twl6040)
 {
-	u8 ldoctl, ncpctl, lppllctl;
+	u8 ldoctl, ncpctl, lppllctl, accctl;
 	int ret;
 
 	/* enable high-side LDO, reference system and internal oscillator */
@@ -157,8 +157,17 @@ static int twl6040_power_up(struct twl6040 *twl6040)
 	if (ret)
 		goto osc_err;
 
+	accctl = ~TWL6040_RESETSPLIT;
+	accctl |= TWL6040_I2CMODE_FAST;
+	ret = twl6040_reg_write(twl6040, TWL6040_REG_ACCCTL, accctl);
+	if (ret)
+		goto acc_err;
+
 	return 0;
 
+acc_err:
+	accctl &= ~TWL6040_RESETSPLIT;
+	twl6040_reg_write(twl6040, TWL6040_REG_ACCCTL, accctl);
 osc_err:
 	lppllctl &= ~TWL6040_LPLLENA;
 	twl6040_reg_write(twl6040, TWL6040_REG_LPPLLCTL, lppllctl);
@@ -323,6 +332,7 @@ int twl6040_power(struct twl6040 *twl6040, int on)
 	mutex_lock(&twl6040->mutex);
 
 	if (on) {
+		u8 accctl;
 		/* already powered-up */
 		if (twl6040->power_count++)
 			goto out;
@@ -332,6 +342,17 @@ int twl6040_power(struct twl6040 *twl6040, int on)
 					TWL6040_SYSCLK_SEL_LPPLL, 1);
 		if (ret)
 			goto out;
+
+		/* For some reason on DVT units this gets reset for some
+		   reason and prevent further communication to the chip. Maybe
+		   it is an Errata with the new chips, we are not sure. For
+		   the sake of making this work, lets write the current values
+		   to the register before further access */
+		accctl = twl6040_reg_read(twl6040, TWL6040_REG_ACCCTL);
+		if ((accctl & TWL6040_I2CMODE_FAST) == 0) {
+			printk("WARNING: TWL6040 glitch detected and ACCCTL i2cMode is reset");
+		}
+		twl6040_reg_write(twl6040, TWL6040_REG_ACCCTL, accctl | TWL6040_I2CSEL | TWL6040_I2CMODE_FAST);
 
 		if (gpio_is_valid(audpwron)) {
 			/* wait for power-up completion */
