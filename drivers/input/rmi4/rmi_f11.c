@@ -20,14 +20,14 @@
 #define FUNCTION_DATA f11_data
 #define FNUM 11
 
-/* NOTE(CMM) We use wakelocks on input to prevent race conditions where
+/* NOTE(GOOG) We use wakelocks on input to prevent race conditions where
  * we may suspend while there is still valid data in transit via the
  * input module. */
 #ifdef CONFIG_WAKELOCK
 #include <linux/wakelock.h>
 #define WAKELOCK_TIMEOUT_IN_MS 250
 #endif
-/* //NOTE(CMM) */
+/* //NOTE(GOOG) */
 
 #include <linux/kernel.h>
 #include <linux/delay.h>
@@ -71,7 +71,7 @@
 #define DEFAULT_MAX_ABS_MT_TRACKING_ID 10
 #define MAX_NAME_LENGTH 256
 
-/* NOTE(CMM) Google definitions */
+/* Google definitions */
 /* Set or unset to output touchpad decoded gesture information */
 // #define DEBUG_GESTURES
 
@@ -81,6 +81,12 @@
 #define GESTURE_MT_MAJOR 15
 #define GESTURE_MT_MINOR 15
 #define GESTURE_PRESSURE 1
+
+/* Default reserved section of the trackpad for thumb switch */
+#define VIEW_CUTOUT_MIN_Y 160
+#define VIEW_CUTOUT_MAX_Y 187
+#define VIEW_CUTOUT_MIN_X 940
+#define VIEW_CUTOUT_MAX_X 1000
 
 /* Size of bounding box around driver detected tap gestures in pixels. */
 static int gesture_detect_tap_box_x = 90;
@@ -110,7 +116,27 @@ static ssize_t f11_gesture_store(struct device *dev,
                                  struct device_attribute *attr,
                                  const char *buf, size_t count);
 
-/* NOTE(CMM) End google definitions */
+static ssize_t f11_view_enable_show(struct device *dev,
+                                    struct device_attribute *attr,
+                                    char *buf);
+
+static ssize_t f11_view_enable_store(struct device *dev,
+                                     struct device_attribute *attr,
+                                     const char *buf, size_t count);
+
+static ssize_t f11_view_dim_show(struct device *dev,
+                                 struct device_attribute *attr,
+                                 char *buf);
+
+static ssize_t f11_view_dim_store(struct device *dev,
+                                  struct device_attribute *attr,
+                                  const char *buf, size_t count);
+
+static ssize_t f11_view_val_show(struct device *dev,
+                                 struct device_attribute *attr,
+                                 char *buf);
+
+/* End google definitions */
 
 static ssize_t f11_relreport_show(struct device *dev,
 					struct device_attribute *attr,
@@ -145,7 +171,10 @@ static struct device_attribute attrs[] = {
 	__ATTR(gesture, RMI_RW_ATTR, f11_gesture_show, f11_gesture_store),
 	__ATTR(relreport, RMI_RW_ATTR, f11_relreport_show, f11_relreport_store),
 	__ATTR(maxPos, RMI_RO_ATTR, f11_maxPos_show, rmi_store_error),
-	__ATTR(rezero, RMI_WO_ATTR, rmi_show_error, f11_rezero_store)
+	__ATTR(rezero, RMI_WO_ATTR, rmi_show_error, f11_rezero_store),
+	__ATTR(view_enable, RMI_RW_ATTR, f11_view_enable_show, f11_view_enable_store),
+	__ATTR(view_val, RMI_RO_ATTR, f11_view_val_show, rmi_store_error),
+	__ATTR(view_dim, RMI_RW_ATTR, f11_view_dim_show, f11_view_dim_store),
 };
 
 /**
@@ -874,15 +903,24 @@ struct f11_data {
 		struct goog_gesture_detect gesture_detect;
 		/* boolean to enable or disable gesture detect. */
 		int goog_gesture_enable;
+		/* boolean to enable or disable viewfinder. */
+		int goog_view_enable;
+		/* Cached value of viewfinder input. */
+		int goog_view_val;
+		/* Dimensions of viewfinder rectangle. */
+		int goog_view_min_y;
+		int goog_view_max_y;
+		int goog_view_min_x;
+		int goog_view_max_x;
 	} goog;
 #ifdef CONFIG_RMI4_DEBUG
 	struct dentry *debugfs_rezero_wait;
 #endif
 };
 
-/* NOTE(CMM) External reference to get suspend cycle count */
+/* NOTE(GOOG) External reference to get suspend cycle count */
 extern unsigned int get_suspend_cnt(void);
-/* //NOTE(CMM) end external reference */
+/* NOTE(GOOG) End external reference */
 
 enum finger_state_values {
 	F11_NO_FINGER	= 0x00,
@@ -1010,10 +1048,10 @@ static ssize_t delta_threshold_write(struct file *filp,
 		return -EFAULT;
 
 	retval = sscanf(local_buf, "%u %u", &new_X, &new_Y);
-	/* NOTE(CMM) Bugfix */
+	/* NOTE(GOOG) Bugfix */
 	if (retval != 2 || new_X < 1 || new_Y < 1)
 		return -EINVAL;
-	/* //NOTE(CMM) */
+	/* //NOTE(GOOG) */
 	save_X = ctrl->ctrl0_9->delta_x_threshold;
 	save_Y = ctrl->ctrl0_9->delta_y_threshold;
 
@@ -1483,13 +1521,13 @@ static void rmi_f11_abs_pos_report(struct f11_data *f11,
 	if (prev_state && !finger_state) {
 		/* this is a release */
 		x = y = z = w_max = w_min = orient = 0;
-		/*  NOTE(CMM)
+		/*  NOTE(GOOG)
 		 * this is a release. Android 4.0 specifies that
 		 * the input device should simply stop sending
 		 * data.  Otherwise it will get interpreted as
 		 * a hover event.*/
 		return;
-		/* //NOTE(CMM) */
+		/* //NOTE(GOOG) */
 	} else if (!prev_state && !finger_state) {
 		/* nothing to report */
 		return;
@@ -1613,7 +1651,7 @@ static int rmi_f11_virtual_button_handler(struct f11_2d_sensor *sensor)
 #ifdef DEBUG_GESTURES
 #define BYTES_LEFT(a,b) (sizeof(a)-(b-a))
 
-/* NOTE(CMM) This is a debug function to understand how the touchpad
+/* NOTE(GOOG) This is a debug function to understand how the touchpad
  * responds to gestures.
  */
 static void rmi_f11_debug_gestures(struct f11_data *f11,
@@ -1669,7 +1707,7 @@ static void rmi_f11_debug_gestures(struct f11_data *f11,
 #endif  /* DEBUG_GESTURES */
 
 /*
- * NOTE(CMM) Google specific function.
+ * NOTE(GOOG) Google specific function.
  * Determines if we are actively in early suspend state, a.k.a. screen-off state.
  * Returns: 1 Early suspend is currently active
  *          0 Early suspend is not active.
@@ -1683,7 +1721,7 @@ static int early_suspend_active(struct f11_data *f11)
 }
 
 /*
- * NOTE(CMM) Google specific function.
+ * NOTE(GOOG) Google specific function.
  * Determines if we immediately came from a suspend state.
  * Returns: 1 We just came from a suspend state.
  *          0 We did not just come from a suspend state.
@@ -1696,7 +1734,7 @@ static int from_suspend_active(struct f11_data *f11)
         return 0;
 }
 
-/* NOTE(CMM) Google specific function.
+/* NOTE(GOOG) Google specific function.
  * Generates an input gesture based upon unique rules specific
  * to Google product.
  * name: Gesture name for logging.
@@ -1735,8 +1773,9 @@ static void rmi_f11_input_gesture(struct f11_data *f11,
 	/* Keep track of count of synthesized keys per suspend cycle. */
 	f11->goog.synth_events_sent++;
 
-	pr_info("%s Created synthesized movement:%s event cnt:%d\n",
-	        __func__, name, f11->goog.synth_events_sent);
+	dev_info(&sensor->fc->dev, "%s Created synthesized movement:%s"
+	         " event_cnt:%d\n", __func__, name,
+	         f11->goog.synth_events_sent);
 
 	/* Set a wakelock to prevent gesture from getting stuck in input layer
 	 * during a suspend cycle. */
@@ -1773,7 +1812,8 @@ static void goog_gesture_accumulate(struct goog_gesture_detect *ggd,
 	}
 }
 
-static void goog_gesture_handler(struct f11_data *f11, struct goog_gesture_detect *ggd) {
+static void goog_gesture_handler(struct f11_data *f11,
+                                 struct goog_gesture_detect *ggd) {
 	/* Convenience field for gesture length in msecs. */
 	unsigned int delta_msec;
 
@@ -1784,38 +1824,44 @@ static void goog_gesture_handler(struct f11_data *f11, struct goog_gesture_detec
 
 	delta_msec = jiffies_to_msecs(ggd->time_end - ggd->time_start);
 	/* Driver synthesized single tap gesture model.
-	 * All touch events must occur within a bounding box, must have at least events,
-	 must only present 1 finger and all must occur within a specified timeslice
-	 as defined as a "tap". */
+	   All touch events must occur within a bounding box, must have at
+	   least 2 events, must only present 1 finger and all must occur within
+	   a specified timeslice as defined as a "tap". */
 	if (((ggd->max_x - ggd->min_x) < gesture_detect_tap_box_x)
 	    && ((ggd->max_y - ggd->min_y) < gesture_detect_tap_box_y)
 	    && (ggd->cnt > 1)
 	    && (ggd->max_fingers == 1)
-	    && (delta_msec > gesture_detect_tap_time_min) && (delta_msec < gesture_detect_tap_time_max)) {
+	    && (delta_msec > gesture_detect_tap_time_min)
+	    && (delta_msec < gesture_detect_tap_time_max)) {
 		/* NOTE() We specify the first sensor for gesture */
-		rmi_f11_input_gesture(f11, &f11->sensors[0], "driver single tap",
+		rmi_f11_input_gesture(f11, &f11->sensors[0],
+		                      "driver single tap",
 		                      GESTURE_OFFSET_SINGLE_TAP_X,
 		                      GESTURE_OFFSET_SINGLE_TAP_Y);
 		/* Consume the early tap to prevent the real gesture
-		   from being sent */
+		   from being sent by the touchpad device. */
 		f11->goog.early_tap = 0;
 	} else {
-		pr_info("%s Ignoring driver sythesized single tap gesture\n", __func__);
-		pr_info("%s max_x:%d min_x:%d max_y:%d min_y:%d cnt:%d fgr:%d time:%d s:%ld e:%ld\n",
-		        __func__, ggd->max_x, ggd->min_x, ggd->max_y, ggd->min_y,
-		        ggd->cnt, ggd->max_fingers, delta_msec, ggd->time_start, ggd->time_end);
+		dev_info(&f11->sensors[0].fc->dev, "%s Ignoring driver"
+		         " synthesized single tap gesture\n", __func__);
+		dev_dbg(&f11->sensors[0].fc->dev, "%s max_x:%d min_x:%d"
+		        " max_y:%d min_y:%d cnt:%d fgr:%d time:%d s:%ld"
+		        " e:%ld\n", __func__, ggd->max_x, ggd->min_x,
+		        ggd->max_y, ggd->min_y, ggd->cnt, ggd->max_fingers,
+		        delta_msec, ggd->time_start, ggd->time_end);
 	}
 	goog_gesture_detect_reset(ggd);
 }
 
-/* NOTE(CMM) This has been modified by Google */
+/* NOTE(GOOG) This has been modified by Google */
 static void rmi_f11_finger_handler(struct f11_data *f11,
 				   struct f11_2d_sensor *sensor)
 {
 	const u8 *f_state = sensor->data.f_state;
-        const struct f11_2d_data *data = &sensor->data;
+	const struct f11_2d_data *data = &sensor->data;
 	u8 finger_state;
 	u8 finger_pressed_count;
+	int finger_view_count;
 	u8 i;
 
 	for (i = 0, finger_pressed_count = 0; i < sensor->nbr_fingers; i++) {
@@ -1823,13 +1869,41 @@ static void rmi_f11_finger_handler(struct f11_data *f11,
 		finger_state = GET_FINGER_STATE(f_state, i);
 
 		if (finger_state == F11_RESERVED) {
-			pr_err("%s: Invalid finger state[%d]:0x%02x.", __func__,
-					i, finger_state);
+			dev_err(&sensor->fc->dev, "%s: Invalid finger"
+			        " state[%d]:0x%02x.", __func__, i,
+			        finger_state);
 			continue;
 		} else if ((finger_state == F11_PRESENT) ||
-				(finger_state == F11_INACCURATE)) {
-			finger_pressed_count++;
-			f11->goog.movement_finger_cnt[i]++;
+		           (finger_state == F11_INACCURATE)) {
+			/* Peek at the XY value */
+			int x_peek = ((data->abs_pos[i].x_msb << 4) | data->abs_pos[i].x_lsb);
+			int y_peek = ((data->abs_pos[i].y_msb << 4) | data->abs_pos[i].y_lsb);
+
+			if (sensor->axis_align.flip_x)
+				x_peek = max(sensor->max_x - x_peek, 0);
+			if (sensor->axis_align.flip_y)
+				y_peek = max(sensor->max_y - y_peek, 0);
+
+			/* If enabled and a finger lands inside
+			   the viewfinder cutout, ignore it for touch
+			   purposes. */
+			if (f11->goog.goog_view_enable
+			    && (f11->goog.movement_finger_cnt[i] == 0)
+			    && (y_peek >= f11->goog.goog_view_min_y)
+			    && (y_peek <= f11->goog.goog_view_max_y)
+			    && (x_peek >= f11->goog.goog_view_min_x)
+			    && (x_peek <= f11->goog.goog_view_max_x)) {
+				/* one finger in specified region indicates
+				   possible viewfinder action. */
+				dev_dbg(&sensor->fc->dev, "%s Viewfinder"
+				        " possibly detected view_cnt:%d\n",
+				        __func__, finger_view_count);
+				finger_view_count++;
+				continue;
+			} else {
+				finger_pressed_count++;
+				f11->goog.movement_finger_cnt[i]++;
+			}
 		}
 
 		if (sensor->data.abs_pos)
@@ -1839,9 +1913,31 @@ static void rmi_f11_finger_handler(struct f11_data *f11,
 			rmi_f11_rel_pos_report(sensor, i);
 	}
 
-	/* NOTE(CMM) Additional functionality put here */
+	if (f11->goog.goog_view_enable) {
+		if ((finger_view_count == 1) && (finger_pressed_count == 0)) {
+			/* Handle start of viewfinder */
+			/* Send switch command.  The input queue will coalesce
+			   duplicates. */
+			f11->goog.goog_view_val = 1;
+			input_report_switch(sensor->input, SW_CAMERA_LENS_COVER,
+			                    f11->goog.goog_view_val);
+			dev_dbg(&sensor->fc->dev, "%s Viewfinder detected\n",
+			        __func__);
+		} else {
+			/* Handle release of viewfinder */
+			f11->goog.goog_view_val = 0;
+			input_report_switch(sensor->input, SW_CAMERA_LENS_COVER,
+			                    f11->goog.goog_view_val);
+			dev_dbg(&sensor->fc->dev, "%s Viewfinder released\n",
+			        __func__);
+		}
+	}
+
 	f11->goog.current_finger_pressed_cnt = finger_pressed_count;
-	if (early_suspend_active(f11)) {
+	/* If we were suspended we will pass device detected gestures.
+	   Unless viewfinder is enabled and there were no finger
+	   events detected outside the viewfinder range. */
+	if (early_suspend_active(f11) && (finger_view_count != 1)) {
 		if (data->gest_1->flick == 1) {
 			rmi_f11_input_gesture(f11, sensor,
 			                      "flick",
@@ -1853,7 +1949,9 @@ static void rmi_f11_finger_handler(struct f11_data *f11,
 		}
 		if (data->gest_1->single_tap == 1) {
 			if (f11->goog.early_tap == 0) {
-				pr_info("%s Rejecting single tap gesture with no previous early tap\n", __func__);
+				dev_info(&sensor->fc->dev, "%s Rejecting single"
+				         " tap gesture with no previous early"
+				         " tap\n", __func__);
 			} else {
 				rmi_f11_input_gesture(f11, sensor,
 				                      "single tap",
@@ -1863,7 +1961,9 @@ static void rmi_f11_finger_handler(struct f11_data *f11,
 		}
 		if (data->gest_1->double_tap == 1) {
 			if (f11->goog.early_tap == 0) {
-				pr_info("%s Rejecting double tap gesture with no previous early tap\n", __func__);
+				dev_info(&sensor->fc->dev, "%s Rejecting double"
+				         " tap gesture with no previous early"
+				         " tap\n", __func__);
 			} else {
 				rmi_f11_input_gesture(f11, sensor,
 				                      "double tap",
@@ -1877,7 +1977,9 @@ static void rmi_f11_finger_handler(struct f11_data *f11,
 				/* This log message is especially verbose because the gesture
 				   is sent during a real finger event so bracket it in
 				   gesture debug logging. */
-				pr_info("%s Rejecting multiple press gesture cnt:%d\n", __func__, f11->goog.press);
+				dev_info(&sensor->fc->dev, "%s Rejecting"
+				         " multiple press gesture cnt:%d\n",
+				         __func__, f11->goog.press);
 #endif  /* DEBUG_GESTURES */
 			} else {
 				/* A press gesture may be generated along with a real finger
@@ -1902,15 +2004,16 @@ static void rmi_f11_finger_handler(struct f11_data *f11,
 
 		/* Driver gesture detect model */
 		if (f11->goog.goog_gesture_enable) {
-			goog_gesture_accumulate(&f11->goog.gesture_detect, f11->goog.finger_cache,
+			goog_gesture_accumulate(&f11->goog.gesture_detect,
+			                        f11->goog.finger_cache,
 			                        finger_pressed_count);
 		}
 	}
 
 	/* Debugging logging */
 	if (f11->goog.prev_finger_pressed_cnt == 0 && f11->goog.current_finger_pressed_cnt != 0) {
-		pr_info("%s Starting movement event cnt:%d\n", __func__,
-		        f11->goog.movement_event_cnt);
+		dev_info(&sensor->fc->dev, "%s Starting movement event"
+		         " cnt:%d\n", __func__, f11->goog.movement_event_cnt);
 	}
 	if (f11->goog.prev_finger_pressed_cnt != 0 && f11->goog.current_finger_pressed_cnt == 0) {
 		/* Save the time from when the last finger lifted.
@@ -1918,9 +2021,12 @@ static void rmi_f11_finger_handler(struct f11_data *f11,
 		   time value before the potentially long printk command. */
 		f11->goog.gesture_detect.time_end = jiffies;
 
-		pr_info("%s Ending movement event cnt:%d fing0:%d fing1:%d fing2:%d\n", __func__,
-		        f11->goog.movement_event_cnt, f11->goog.movement_finger_cnt[0],
-		        f11->goog.movement_finger_cnt[1], f11->goog.movement_finger_cnt[2]);
+		dev_info(&sensor->fc->dev, "%s Ending movement event cnt:%d"
+		         " fing0:%d fing1:%d fing2:%d\n", __func__,
+		         f11->goog.movement_event_cnt,
+		         f11->goog.movement_finger_cnt[0],
+		         f11->goog.movement_finger_cnt[1],
+		         f11->goog.movement_finger_cnt[2]);
 		f11->goog.movement_event_cnt = 0;
 		memset(f11->goog.movement_finger_cnt, 0, sizeof(f11->goog.movement_finger_cnt));
 
@@ -1930,7 +2036,7 @@ static void rmi_f11_finger_handler(struct f11_data *f11,
 		}
 	}
 	if (f11->goog.prev_finger_pressed_cnt == 0 && f11->goog.current_finger_pressed_cnt == 0) {
-		pr_debug("%s Extraneous event\n", __func__);
+		dev_dbg(&sensor->fc->dev, "%s Extraneous event\n", __func__);
 	} else {
 		f11->goog.movement_event_cnt++;
 	}
@@ -1955,11 +2061,6 @@ static void rmi_f11_finger_handler(struct f11_data *f11,
 	/* Update the previous finger pressed count. */
 	f11->goog.prev_finger_pressed_cnt = f11->goog.current_finger_pressed_cnt;
 
-#if 0
-	/* NOTE(CMM) We don't use touchpad buttons so ignore this statement. */
-	input_report_key(sensor->input, BTN_TOUCH, finger_pressed_count);
-#endif
-	/* NOTE(CMM) End additional functionality and changes. */
 	input_sync(sensor->input);
 }
 
@@ -2706,13 +2807,18 @@ static int rmi_f11_initialize(struct rmi_function_container *fc)
 		}
 	}
 
-	/* NOTE(CMM) Google specific initialization */
+	/* Google specific initialization */
 #ifdef CONFIG_WAKELOCK
 	wake_lock_init(&f11->goog.wakelock, WAKE_LOCK_SUSPEND, "touchpad_wakelock");
 #endif
 	goog_gesture_detect_reset(&f11->goog.gesture_detect);
 
-	/* //NOTE(CMM) */
+	/* Viewfinder cutout initial dimensions */
+	f11->goog.goog_view_min_y = VIEW_CUTOUT_MIN_Y;
+	f11->goog.goog_view_max_y = VIEW_CUTOUT_MAX_Y;
+	f11->goog.goog_view_min_x = VIEW_CUTOUT_MIN_X;
+	f11->goog.goog_view_max_x = VIEW_CUTOUT_MAX_X;
+	/* Google */
 
 	if (IS_ENABLED(CONFIG_RMI4_DEBUG)) {
 		rc = setup_f11_debugfs(fc);
@@ -2790,12 +2896,9 @@ static int rmi_f11_register_devices(struct rmi_function_container *fc)
 
 		set_bit(EV_SYN, input_dev->evbit);
 		set_bit(EV_ABS, input_dev->evbit);
-#if 0
-		/* NOTE(CMM) Touchpad by definition does not have a button
-		   at least on Android, so registering this input is
-		   incorrect. */
-		input_set_capability(input_dev, EV_KEY, BTN_TOUCH);
-#endif
+		set_bit(EV_SW, input_dev->evbit);
+		set_bit(SW_CAMERA_LENS_COVER, input_dev->swbit);
+
 		set_bit(INPUT_PROP_DIRECT, input_dev->propbit);
 
 		f11_set_abs_params(fc, i);
@@ -2944,7 +3047,6 @@ static int rmi_f11_config(struct rmi_function_container *fc)
 		if (rc < 0)
 			return rc;
 	}
-
 	return 0;
 }
 
@@ -3010,9 +3112,8 @@ static int rmi_f11_resume(struct rmi_function_container *fc)
 	data->goog.early_suspended = 0;
 	dev_info(&fc->dev, "%s Late resumed touchpad", __FUNCTION__);
 
-	/* NOTE(CMM) Begin original resume functionality.  In our case we do not
+	/* NOTE(GOOG) Begin original resume functionality.  In our case we do not
 	 * enable the rezero dunctionality so we simply return. */
-
 	if (!data->rezero_wait_ms)
 		return 0;
 
@@ -3074,7 +3175,7 @@ static struct rmi_function_handler function_handler = {
 	.func = 0x11,
 	.config = rmi_f11_config,
 	.attention = rmi_f11_attention,
-/* NOTE(CMM) Additional power management */
+/* NOTE(GOOG) Additional power management */
 #ifdef  CONFIG_PM
 #if defined(CONFIG_HAS_EARLYSUSPEND)
         .early_suspend = rmi_f11_suspend,
@@ -3244,6 +3345,111 @@ static ssize_t f11_rezero_store(struct device *dev,
 	}
 
 	return count;
+}
+
+static ssize_t f11_view_enable_show(struct device *dev,
+                                    struct device_attribute *attr,
+                                    char *buf)
+{
+	struct rmi_function_container *fc;
+	struct f11_data *instance_data;
+
+	fc = to_rmi_function_container(dev);
+	instance_data = fc->data;
+
+	return snprintf(buf, PAGE_SIZE, "%u\n",
+	                instance_data->goog.goog_view_enable);
+}
+
+static ssize_t f11_view_enable_store(struct device *dev,
+                                     struct device_attribute *attr,
+                                     const char *buf,
+                                     size_t count)
+{
+	struct rmi_function_container *fc;
+	struct f11_data *instance_data;
+	unsigned int new_value;
+
+	fc = to_rmi_function_container(dev);
+	instance_data = fc->data;
+
+	if (sscanf(buf, "%u", &new_value) != 1)
+		return -EINVAL;
+	if (new_value < 0 || new_value > 1)
+		return -EINVAL;
+	instance_data->goog.goog_view_enable = new_value;
+
+	return count;
+}
+
+static ssize_t f11_view_dim_show(struct device *dev,
+                                 struct device_attribute *attr,
+                                 char *buf)
+{
+	struct rmi_function_container *fc;
+	struct f11_data *instance_data;
+
+	fc = to_rmi_function_container(dev);
+	instance_data = fc->data;
+
+	return snprintf(buf, PAGE_SIZE, "%u %u %u %u\n",
+	                instance_data->goog.goog_view_min_y,
+	                instance_data->goog.goog_view_max_y,
+	                instance_data->goog.goog_view_min_x,
+	                instance_data->goog.goog_view_max_x);
+}
+
+static ssize_t f11_view_dim_store(struct device *dev,
+                                     struct device_attribute *attr,
+                                     const char *buf,
+                                     size_t count)
+{
+	struct rmi_function_container *fc;
+	struct f11_data *instance_data;
+	unsigned int new_value[4];
+
+	fc = to_rmi_function_container(dev);
+	instance_data = fc->data;
+
+	if (sscanf(buf, "%u %u %u %u", &new_value[0], &new_value[1],
+	           &new_value[2], &new_value[3]) != 4)
+		return -EINVAL;
+	/* Boundaries must be within touchpad physical limits */
+	if (new_value[0] > instance_data->sensors[0].max_y)
+		return -EINVAL;
+	if (new_value[1] > instance_data->sensors[0].max_y)
+		return -EINVAL;
+	if (new_value[2] > instance_data->sensors[0].max_x)
+		return -EINVAL;
+	if (new_value[3] > instance_data->sensors[0].max_x)
+		return -EINVAL;
+
+	/* Boundaries also must keep min/max relationship */
+	if (new_value[0] > new_value[1])
+		return -EINVAL;
+	if (new_value[2] > new_value[3])
+		return -EINVAL;
+
+	instance_data->goog.goog_view_min_y = new_value[0];
+	instance_data->goog.goog_view_max_y = new_value[1];
+	instance_data->goog.goog_view_min_x = new_value[2];
+	instance_data->goog.goog_view_max_x = new_value[3];
+	return count;
+}
+
+
+static ssize_t f11_view_val_show(struct device *dev,
+                                 struct device_attribute *attr,
+                                 char *buf)
+{
+	struct rmi_function_container *fc;
+	struct f11_data *instance_data;
+
+	fc = to_rmi_function_container(dev);
+	instance_data = fc->data;
+
+	return snprintf(buf, PAGE_SIZE, "%u\n",
+	                instance_data->goog.goog_view_val);
 }
 
 /* Control sysfs files */
