@@ -1205,10 +1205,14 @@ static int ipx_proto(const struct sk_buff *skb,
 
 	switch (par->family) {
 	case NFPROTO_IPV6:
+#if defined(CONFIG_IP6_NF_IPTABLES) || defined(CONFIG_IP6_NF_IPTABLES_MODULE)
 		tproto = ipv6_find_hdr(skb, &thoff, -1, NULL);
 		if (tproto < 0)
 			MT_DEBUG("%s(): transport header not found in ipv6"
 				 " skb=%p\n", __func__, skb);
+#else
+		tproto = IPPROTO_RAW;
+#endif
 		break;
 	case NFPROTO_IPV4:
 		tproto = ip_hdr(skb)->protocol;
@@ -1633,12 +1637,14 @@ static int __init iface_stat_init(struct proc_dir_entry *parent_procdir)
 		goto err_unreg_nd;
 	}
 
+#if defined(CONFIG_IPV6) || defined(CONFIG_IPV6_MODULE)
 	err = register_inet6addr_notifier(&iface_inet6addr_notifier_blk);
 	if (err) {
 		pr_err("qtaguid: iface_stat: init "
 		       "failed to register ipv6 dev event handler\n");
 		goto err_unreg_ip4_addr;
 	}
+#endif
 	return 0;
 
 err_unreg_ip4_addr:
@@ -1658,7 +1664,7 @@ err:
 static struct sock *qtaguid_find_sk(const struct sk_buff *skb,
 				    struct xt_action_param *par)
 {
-	struct sock *sk;
+	struct sock *sk = NULL;
 	unsigned int hook_mask = (1 << par->hooknum);
 
 	MT_DEBUG("qtaguid: find_sk(skb=%p) hooknum=%d family=%d\n", skb,
@@ -1673,7 +1679,9 @@ static struct sock *qtaguid_find_sk(const struct sk_buff *skb,
 
 	switch (par->family) {
 	case NFPROTO_IPV6:
+#if defined(CONFIG_IPV6) || defined(CONFIG_IPV6_MODULE)
 		sk = xt_socket_get6_sk(skb, par);
+#endif
 		break;
 	case NFPROTO_IPV4:
 		sk = xt_socket_get4_sk(skb, par);
