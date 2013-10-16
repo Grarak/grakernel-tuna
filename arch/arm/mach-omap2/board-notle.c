@@ -728,6 +728,7 @@ static struct omap2_hsmmc_info mmc[] = {
                 .name           = "bcm4329",
                 .mmc            = 5,
                 .caps           = MMC_CAP_4_BIT_DATA,
+                .pm_caps        = MMC_PM_KEEP_POWER,
                     // TODO(abliss): | MMC_CAP_POWER_OFF_CARD,
                 .gpio_wp        = -EINVAL,
                 .gpio_cd        = -EINVAL,
