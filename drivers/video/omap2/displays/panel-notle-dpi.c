@@ -1187,7 +1187,7 @@ static int ice40_load(const u32 size, const u8 *bits, struct notle_drv_data *not
   u8 zero_byte = 0;
   int i;
   int r;
-  u8 bits_buffer[4096];
+  u8 bits_buffer[2048];
   const int bufsz = sizeof bits_buffer;
 
   if (!bus_data.ice40_device) {
@@ -1291,7 +1291,8 @@ static int fpga_reconfigure_inner(const struct firmware *fw,
                        ((u8 *) image_end)
                        - (((u8 *) fpga_image) + zero_posn + sizeof zero_u32));
     if (expected_crc != actual_crc) {
-      printk(KERN_WARNING LOG_TAG "FPGA image CRC failed, expected 0x%08x, found 0x%08x\n",
+      printk(KERN_WARNING LOG_TAG
+             "FPGA image CRC failed, expected 0x%08x, found 0x%08x\n",
              expected_crc, actual_crc);
       return -1;
     }
@@ -1304,7 +1305,8 @@ static int fpga_reconfigure_inner(const struct firmware *fw,
          entry->supported_board_revs[j];
          ++j) {
       if (entry->supported_board_revs[j] == version) {
-        printk(KERN_INFO LOG_TAG "Entering ice40_load revision 0x%02x for Board ID 0x%02x (%d bytes)\n",
+        printk(KERN_INFO LOG_TAG
+               "ice40_load rev 0x%02x for Board ID 0x%02x (%d bytes)\n",
                entry->revision, version, entry->raw_length);
         if (ice40_load(entry->raw_length, entry->raw_image, notle_data) == 0)
           return 0;
@@ -1321,13 +1323,13 @@ static void fpga_reconfigure(struct notle_drv_data *notle_data) {
   const struct firmware *fw;
   const char *fpga_img_name = "dss_fpga.img";
   int status;
-  printk("request_firmware %s ...\n", fpga_img_name);
+  printk(KERN_INFO LOG_TAG "request_firmware %s ...\n", fpga_img_name);
   status = request_firmware(&fw, fpga_img_name, &(notle_data->dssdev->dev));
   if (status) {
-    printk("request_firmware %s failed, status %d\n", fpga_img_name, status);
+    printk(KERN_WARNING LOG_TAG "request_firmware %s failed, status %d\n", fpga_img_name, status);
   }
   else {
-    printk("request_firmware %s size=%d\n", fpga_img_name, fw->size);
+    printk(KERN_INFO LOG_TAG "request_firmware %s size=%d\n", fpga_img_name, fw->size);
     (void) fpga_reconfigure_inner(fw, notle_data);
     release_firmware(fw);
   }
