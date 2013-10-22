@@ -18,10 +18,13 @@
  */
 
 #include <linux/delay.h>
+#include <linux/firmware.h>
+#include <linux/crc32.h>
 #include <linux/i2c.h>
 #include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/spi/spi.h>
+#include <linux/gpio.h>
 #include <plat/omap_device.h>
 #include <plat/omap_hwmod.h>
 #include <plat/omap-pm.h>
@@ -97,6 +100,7 @@ struct init_register_value {
 static const u8 ice40_regs[] = {
   ICE40_REVISION,
   ICE40_PIPELINE,
+  ICE40_LCOS,
   ICE40_BACKLIGHT,
   ICE40_LED_RED_H,
   ICE40_LED_RED_L,
@@ -277,12 +281,19 @@ static int fpga_read_revision(void);
 static void led_config_to_linecuts(struct omap_dss_device *dssdev,
                                    struct led_config *led, int *red_linecut,
                                    int *green_linecut, int *blue_linecut);
+static void fpga_reconfigure(struct notle_drv_data *notle_data);
 
 /* Sysfs interface */
 static ssize_t sysfs_reset(struct notle_drv_data *notle_data,
                            const char *buf, size_t size) {
+        int r, value;
         panel_notle_power_off(notle_data->dssdev);
         notle_data->dssdev->state = OMAP_DSS_DISPLAY_DISABLED;
+
+        r = kstrtoint(buf, 0, &value);
+        if (!r && value) {
+          fpga_reconfigure(notle_data);
+        }
 
         msleep(100);
         if (!panel_notle_power_on(notle_data->dssdev)) {
@@ -1139,6 +1150,187 @@ static int fpga_read_revision(void) {
         }
 
         return rev;
+}
+
+/* reconfigure FPGA */
+
+/* struct declarations duplicated from u-boot !!! */
+
+struct fpga_header {
+  u8 magic[4]; /* Two variants are supported:
+                  "FPGA" for padded format, "fpga" for unpadded */
+  u32 entry_count;
+  /*
+   * CRC32 of the fpga_header (with crc32 zeroed) and fpga_entries,
+   * but does not include any padding in the fpga_image struct.
+   */
+  u32 crc32;
+} __attribute__ ((packed));
+
+struct fpga_entry {
+  u32 revision;
+  u8 supported_board_revs[8];
+  u32 raw_length;  /* Length of the raw image in bytes */
+  u8 raw_image[4]; /* placeholder, size is determined by raw_length */
+} __attribute__ ((packed));
+
+inline static struct fpga_entry *next_entry(const struct fpga_entry *entry) {
+  return (struct fpga_entry *)
+      (((u8 *) entry)
+       + offsetof(struct fpga_entry, raw_image)
+       + entry->raw_length);
+}
+
+static int ice40_load(const u32 size, const u8 *bits, struct notle_drv_data *notle_data) {
+  struct omap_dss_device *dssdev = notle_data->dssdev;
+  struct panel_notle_data *panel_data = get_panel_data(dssdev);
+  u8 zero_byte = 0;
+  int i;
+  int r;
+  u8 bits_buffer[4096];
+  const int bufsz = sizeof bits_buffer;
+
+  if (!bus_data.ice40_device) {
+    printk(KERN_ERR LOG_TAG "ice40_load: No iCE40 bus data set in ice40_load()\n");
+    return -1;
+  }
+  /* set CS polarity *active* high so it is low when creset goes high */
+  bus_data.ice40_device->mode |= SPI_CS_HIGH;
+  spi_setup(bus_data.ice40_device);
+  gpio_set_value(panel_data->gpio_fpga_creset_b, 0);
+  mdelay(1);
+  gpio_set_value(panel_data->gpio_fpga_creset_b, 1);
+  mdelay(1);
+
+  if (gpio_get_value(panel_data->gpio_fpga_cdone) == 1) {
+    printk(KERN_WARNING LOG_TAG "CDONE high after reset wait\n");
+    return -1;
+  }
+  /* Send blank byte preamble */
+  spi_write(bus_data.ice40_device, &zero_byte, sizeof zero_byte);
+  /* Can't send firmware image data directly to SPI driver, due to
+   * DMA accessibility issues.  Need a local copy.
+   */
+  for (i = 0; i < size; i+=bufsz) {
+    memcpy(bits_buffer, bits + i, (size-i) > bufsz ? bufsz : size-i);
+    spi_write(bus_data.ice40_device, bits_buffer,
+              (size-i) > bufsz ? bufsz : size-i);
+  }
+  for (i = 0; i < 13; i++)
+    spi_write(bus_data.ice40_device, &zero_byte, sizeof zero_byte);
+  /* Wait for CDONE */
+  for (i = 0; i < 1000; ++i) {
+    if (gpio_get_value(panel_data->gpio_fpga_cdone) == 1) {
+      break;
+    }
+  }
+  if (i == 1000) {
+    printk(KERN_WARNING LOG_TAG "WARNING: Timeout waiting for CDONE\n");
+    return -1;
+  }
+
+  /* restore CS polarity */
+  bus_data.ice40_device->mode &= ~SPI_CS_HIGH;
+  spi_setup(bus_data.ice40_device);
+  if (panel_data->platform_enable) {
+    r = panel_data->platform_enable(dssdev);
+    if (r) {
+      printk(KERN_ERR LOG_TAG "Failed to platform_enable\n");
+      return -1;
+    }
+  }
+  if ((r = ice40_read_register(ICE40_REVISION)) < 0) {
+    printk(KERN_WARNING LOG_TAG "Failed to read iCE40 FPGA config: %i\n", r);
+    return -1;
+  }
+  if (r == 0xff) {
+    printk(KERN_WARNING LOG_TAG "ERROR: FPGA revision 0xff is invalid\n");
+    return -1;
+  }
+  return 0;
+}
+
+static int fpga_reconfigure_inner(const struct firmware *fw,
+                                  struct notle_drv_data *notle_data) {
+  const void *fpga_image = fw->data;
+  const struct fpga_header *fw_header = fpga_image;
+  /* 1st fpga_entry immediately follows header */
+  const struct fpga_entry *fw_entry0 = (void *) (fw_header+1);
+  const struct fpga_entry *entry;
+  const void *fw_lim = (char *) fpga_image + fw->size;
+  int i, j;
+  u32 expected_crc;
+  u32 actual_crc;
+  if (!notle_version_supported()) {
+    printk(KERN_WARNING LOG_TAG "Unsupported Notle version:"
+           " %d\n", version);
+    return -1;
+  }
+  if (memcmp(fw_header->magic, "fpga", 4) != 0) {
+    printk(KERN_WARNING LOG_TAG "firmware image: bad magic number (%08x)\n",
+           *(u32 *)(fw_header->magic));
+    return -1;
+  }
+
+  expected_crc = fw_header->crc32;
+  {
+    const struct fpga_entry *image_end;
+    const u32 zero_u32 = 0;
+    const u32 zero_posn = offsetof(struct fpga_header, crc32);
+    for (i = 0, image_end = fw_entry0;
+         i < fw_header->entry_count && ((void *) image_end) < fw_lim;
+         i++) {
+      image_end = next_entry(image_end);
+    }
+    /* fpga image CRC requires encapsulating system crc32 with
+     * negation (~) on entry/exit
+     */
+    actual_crc =  crc32(~0, (u8*)fpga_image, zero_posn);
+    actual_crc =  crc32( actual_crc, (u8 *) &zero_u32, sizeof zero_u32);
+    actual_crc = ~crc32( actual_crc, ((u8*)fpga_image) + zero_posn + sizeof zero_u32,
+                       ((u8 *) image_end)
+                       - (((u8 *) fpga_image) + zero_posn + sizeof zero_u32));
+    if (expected_crc != actual_crc) {
+      printk(KERN_WARNING LOG_TAG "FPGA image CRC failed, expected 0x%08x, found 0x%08x\n",
+             expected_crc, actual_crc);
+      return -1;
+    }
+  }
+  /* search available entries for a compatible FPGA bitstream */
+  for (i = 0, entry = fw_entry0;
+       i < fw_header->entry_count;
+       ++i, entry = next_entry(entry)) {
+    for (j = 0; (j < sizeof(entry->supported_board_revs)) &&
+         entry->supported_board_revs[j];
+         ++j) {
+      if (entry->supported_board_revs[j] == version) {
+        printk(KERN_INFO LOG_TAG "Entering ice40_load revision 0x%02x for Board ID 0x%02x (%d bytes)\n",
+               entry->revision, version, entry->raw_length);
+        if (ice40_load(entry->raw_length, entry->raw_image, notle_data) == 0)
+          return 0;
+      }
+    }
+  }
+  printk(KERN_WARNING LOG_TAG "Found no FPGA image for Board ID 0x%02x\n",
+         version);
+
+  return -1;
+}
+
+static void fpga_reconfigure(struct notle_drv_data *notle_data) {
+  const struct firmware *fw;
+  const char *fpga_img_name = "dss_fpga.img";
+  int status;
+  printk("request_firmware %s ...\n", fpga_img_name);
+  status = request_firmware(&fw, fpga_img_name, &(notle_data->dssdev->dev));
+  if (status) {
+    printk("request_firmware %s failed, status %d\n", fpga_img_name, status);
+  }
+  else {
+    printk("request_firmware %s size=%d\n", fpga_img_name, fw->size);
+    (void) fpga_reconfigure_inner(fw, notle_data);
+    release_firmware(fw);
+  }
 }
 
 /* Functions to perform actions on the panel and DSS driver */
