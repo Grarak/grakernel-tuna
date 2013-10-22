@@ -1369,6 +1369,17 @@ static int panel_notle_power_on(struct omap_dss_device *dssdev) {
           }
         }
 
+        /* Check FPGA is reporting a valid revision,
+         * if not attempt to reconfigure
+         */
+        r = ice40_read_register(ICE40_REVISION);
+        if (r == 0xff) {
+          printk(KERN_WARNING LOG_TAG
+                 "WARNING: "
+                 "Probable deconfiguration of FPGA, reconfiguring ...\n");
+          fpga_reconfigure(drv_data);
+        }
+
         /*
         ** TODO(madsci): use fpga version instead of notle version here
         */
