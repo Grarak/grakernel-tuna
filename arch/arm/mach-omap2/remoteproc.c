@@ -34,6 +34,10 @@
 #include "cm2_44xx.h"
 #include "cm-regbits-44xx.h"
 
+#ifdef CONFIG_MACH_NOTLE
+extern u32 __get_notle_memsize(void);
+#endif
+
 /*
  * CLKCTRL register will be used as idle register, due to the bit 18 is
  * STBYST bit:
@@ -113,6 +117,9 @@ static struct omap_rproc_pdata omap4_rproc_data[] = {
 	{
 		.name		= "dsp_c0",
 		.firmware	= "tesla-dsp.xe64T",
+#ifdef CONFIG_MACH_NOTLE
+		.firmware_2gb	= "tesla-dsp-2gb.xe64T",
+#endif
 		.mbox_name	= "mailbox-2",
 		.oh_name	= "dsp_c0",
 		.boot_reg	= OMAP4430_CONTROL_DSP_BOOTADDR,
@@ -125,7 +132,10 @@ static struct omap_rproc_pdata omap4_rproc_data[] = {
 #ifdef CONFIG_OMAP_REMOTEPROC_IPU
 	{
 		.name		= "ipu_c0",
-                .firmware	= "ducati-m3-core0.xem3",
+		.firmware	= "ducati-m3-core0.xem3",
+#ifdef CONFIG_MACH_NOTLE
+		.firmware_2gb	= "ducati-m3-core0-2gb.xem3",
+#endif
 		.mbox_name	= "mailbox-1",
 		.oh_name	= "ipu_c0",
 		.oh_name_opt	= "ipu_c1",
@@ -325,6 +335,12 @@ static int __init omap_rproc_init(void)
 			oh_count++;
 		}
 
+#ifdef CONFIG_MACH_NOTLE
+		// Use the 2GB firmware for 2GB devices.
+		if (__get_notle_memsize() == 2048) {
+			omap4_rproc_data[i].firmware = omap4_rproc_data[i].firmware_2gb;
+		}
+#endif
 		omap4_rproc_data[i].device_enable = omap_device_enable;
 		omap4_rproc_data[i].device_shutdown = omap_device_shutdown;
 

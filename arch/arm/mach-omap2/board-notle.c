@@ -2180,7 +2180,7 @@ static struct __devinitdata emif_custom_configs custom_configs = {
     .lpmode_freq_threshold = 400000000,
 };
 
-static u32 __get_notle_memsize(void)
+u32 __get_notle_memsize(void)
 {
     // Check the DMM Register to figure out if this is 1 GB or 2 GB device
     // bit 22:20 specs the sys size.

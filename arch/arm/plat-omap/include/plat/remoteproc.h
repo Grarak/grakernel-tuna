@@ -56,6 +56,9 @@ struct omap_rproc_pdata {
 	const char *oh_name;
 	const char *oh_name_opt;
 	const char *firmware;
+#ifdef CONFIG_MACH_NOTLE
+	const char *firmware_2gb;
+#endif
 	const char *mbox_name;
 	u32 idle_addr;
 	u32 idle_mask;
