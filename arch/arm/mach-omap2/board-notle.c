@@ -1732,13 +1732,6 @@ static struct i2c_board_info __initdata notle_i2c_4_boardinfo[] = {
 #endif
 };
 
-static void __init notle_pmic_mux_init(void)
-{
-
-        omap_mux_init_signal("sys_nirq1", OMAP_PIN_INPUT_PULLUP |
-                                          OMAP_WAKEUP_EN);
-}
-
 static void __init omap_i2c_hwspinlock_init(int bus_id, int spinlock_id,
                                 struct omap_i2c_bus_board_data *pdata)
 {
@@ -1972,6 +1965,7 @@ static struct omap_board_mux evt2_board_mux[] __initdata = {
     OMAP4_MUX(USBB1_ULPITLL_STP,    OMAP_MUX_MODE3 | OMAP_PIN_INPUT),   // FPGA_CDONE
     OMAP4_MUX(USBB1_ULPITLL_NXT,    OMAP_MUX_MODE3 | OMAP_PIN_OUTPUT),  // FPGA_CRESET_B
     OMAP4_MUX(USBB1_ULPITLL_DAT7,   OMAP_MUX_MODE7 ),                   // FPGA_CBSEL1
+    OMAP4_MUX(SYS_NIRQ1,            OMAP_MUX_MODE0 | OMAP_PIN_INPUT_PULLUP | OMAP_PIN_OFF_WAKEUPENABLE | OMAP_WAKEUP_EN | OMAP_PIN_OFF_INPUT_PULLUP),
 	{ .reg_offset = OMAP_MUX_TERMINATOR },
 };
 // EVT2 WakeUp:
@@ -2256,7 +2250,6 @@ static void __init notle_init(void)
             omap_reg &= ~OMAP4_USIM_PBIASLITE_VMODE_MASK;
             omap4_ctrl_pad_writel(omap_reg, OMAP4_CTRL_MODULE_PAD_CORE_CONTROL_PBIASLITE);
         }
-        notle_pmic_mux_init();
 
         printk("Notle board revision: %s(%d)", notle_version_str(NOTLE_VERSION), NOTLE_VERSION);
 
