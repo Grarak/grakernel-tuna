@@ -1330,7 +1330,10 @@ static void fpga_reconfigure(struct notle_drv_data *notle_data) {
   }
   else {
     printk(KERN_INFO LOG_TAG "request_firmware %s size=%d\n", fpga_img_name, fw->size);
-    (void) fpga_reconfigure_inner(fw, notle_data);
+    if (fpga_reconfigure_inner(fw, notle_data) == 0) {
+      ice40_write_register(ICE40_PIPELINE, ice40_defaults.pipeline);
+      ice40_write_register(ICE40_BACKLIGHT, ice40_defaults.backlight);
+    }
     release_firmware(fw);
   }
 }
@@ -1484,7 +1487,10 @@ static void panel_notle_power_off(struct omap_dss_device *dssdev) {
         }
         /* Save register values so we can restore them when we power on. */
         i = ice40_read_register(ICE40_BACKLIGHT);
-        if (i > 0) {
+        if (i > 0 && i != 0xff) {
+          /* if 0xff is an illegal value.  Assume FPGA is in a bad state and do
+           * not cache bogus value
+           */
           ice40_defaults.backlight = i;
         }
 
