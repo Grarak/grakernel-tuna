@@ -11,7 +11,7 @@ bldcya=${txtbld}$(tput setaf 6) # cyan
 
 txtrst=$(tput sgr0) # Reset
 
-version=v1.3.0
+version=0.1
 tcf=~/android/kernel/toolchains/
 
 DATE_START=$(date +"%s")
@@ -54,7 +54,7 @@ fi
 make tuna_defconfig
 
 cp arch/arm/configs/gk_tuna_defconfig .config
-sed -i s/CONFIG_LOCALVERSION=\".*\"/CONFIG_LOCALVERSION=\"-GraKernel_${butterversion}\"/ .config
+sed -i s/CONFIG_LOCALVERSION=\".*\"/CONFIG_LOCALVERSION=\"-GraKernel_${version}\"/ .config
 
 ###########################################################################
 echo -e "${bldcya}This could take a while .... ${txtrst}"
