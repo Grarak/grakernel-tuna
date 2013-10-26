@@ -37,6 +37,7 @@ boot.img
 zImage
 ashldi3.S
 romswitcher
+piggy.xzkern
 
 #
 # Top-level generic files

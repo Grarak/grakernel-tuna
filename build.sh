@@ -60,7 +60,9 @@ sed -i s/CONFIG_LOCALVERSION=\".*\"/CONFIG_LOCALVERSION=\"-GraKernel_${butterver
 
 ###########################################################################
 echo -e "${bldcya}This could take a while .... ${txtrst}"
-make -j4
+
+nice -n 10 make modules -j4 ARCH=arm
+nice -n 10 make -j4 ARCH=arm
 
 ###########################################################################
 if [ -e arch/arm/boot/zImage ]; then
