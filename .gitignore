@@ -35,11 +35,8 @@ modules.builtin
 *.gcno
 boot.img
 zImage
-ButterKernel.zip
-out/ButterKernel/*.zip
-out/ButterKernelDual/*.zip
-arch/arm/boot/compressed/ashldi3.S
-arch/arm/boot/compressed/piggy.xzkern
+ashldi3.S
+romswitcher
 
 #
 # Top-level generic files
