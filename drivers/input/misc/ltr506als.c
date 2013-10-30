@@ -64,12 +64,6 @@ struct ltr506_data {
 
 	uint8_t part_id;
 
-	/* Device mode
-	 * 0 = ALS
-	 * 1 = PS
-	 */
-	int mode;
-
 	/* ALS */
 	int als_enable_flag;
 	int als_suspend_enable_flag;
@@ -123,6 +117,7 @@ static int als_disable(struct ltr506_data *ltr506);
 static int I2C_Read(char *rxData,
                     int length)
 {
+	int rc;
 	int index;
 	struct i2c_msg data[] = {
 		{
@@ -140,8 +135,14 @@ static int I2C_Read(char *rxData,
 	};
 
 	for (index = 0; index < I2C_RETRY; index++) {
-		if (i2c_transfer(sensor_info->i2c_client->adapter, data, 2) > 0)
+		rc = i2c_transfer(sensor_info->i2c_client->adapter, data,
+		                  sizeof(data)/sizeof(struct i2c_msg));
+		if (rc == 2)
+			/* Success */
 			break;
+		else if (rc == 1)
+			pr_err("%s %s Sent only one i2c request\n", __func__,
+			       DEVICE_NAME);
 
 		mdelay(10);
 	}
@@ -184,16 +185,17 @@ static int I2C_Write(char *txData, int length)
  * Returns: 0    OK
  *          -EIO ERROR
  */
-static int _ltr506_set_bit(struct i2c_client *client, u8 set, u8 cmd, u8 data)
+static int _ltr506_set_bit(struct i2c_client *client, uint8_t set, uint8_t cmd,
+                           uint8_t data)
 {
 	char buffer[2];
-	u8 value;
+	uint8_t value;
 	int ret = 0;
 
 	buffer[0] = cmd;
 	ret = I2C_Read(buffer, 1);
 	if (ret < 0) {
-		dev_err(&client->dev, "%s | 0x%02X", __func__, buffer[0]);
+		dev_err(&client->dev, "%s | 0x%02X\n", __func__, buffer[0]);
 		return ret;
 	}
 
@@ -208,7 +210,7 @@ static int _ltr506_set_bit(struct i2c_client *client, u8 set, u8 cmd, u8 data)
 	buffer[1] = value;
 	ret = I2C_Write(buffer, 2);
 	if (ret < 0) {
-		dev_err(&client->dev, "%s | 0x%02X", __func__, buffer[0]);
+		dev_err(&client->dev, "%s | 0x%02X\n", __func__, buffer[0]);
 		return -EIO;
 	}
 
@@ -216,16 +218,17 @@ static int _ltr506_set_bit(struct i2c_client *client, u8 set, u8 cmd, u8 data)
 }
 
 /* Set register field */
-static int _ltr506_set_field(struct i2c_client *client, u8 mask, u8 cmd, u8 data)
+static int _ltr506_set_field(struct i2c_client *client, uint8_t mask, uint8_t cmd,
+                             uint8_t data)
 {
 	char buffer[2];
-	u8 value;
+	uint8_t value;
 	int ret = 0;
 
 	buffer[0] = cmd;
 	ret = I2C_Read(buffer, 1);
 	if (ret < 0) {
-		dev_err(&client->dev, "%s | 0x%02X", __func__, buffer[0]);
+		dev_err(&client->dev, "%s | 0x%02X\n", __func__, buffer[0]);
 		return -EIO;
 	}
 
@@ -236,7 +239,7 @@ static int _ltr506_set_field(struct i2c_client *client, u8 mask, u8 cmd, u8 data
 	buffer[1] = value;
 	ret = I2C_Write(buffer, 2);
 	if (ret < 0) {
-		dev_err(&client->dev, "%s | 0x%02X", __func__, buffer[0]);
+		dev_err(&client->dev, "%s | 0x%02X\n", __func__, buffer[0]);
 		return -EIO;
 	}
 
@@ -255,7 +258,8 @@ static uint32_t read_als_adc_ch1_value(struct ltr506_data *ltr506)
 	/* read data bytes from data regs */
 	ret = I2C_Read(buffer, sizeof(buffer));
 	if (ret < 0) {
-		dev_err(&ltr506->i2c_client->dev, "%s Unable to read als adc ch1 values\n", __func__);
+		dev_err(&ltr506->i2c_client->dev, "%s Unable to read als adc"
+		        " ch1 values\n", __func__);
 		return 0;
 	}
 
@@ -275,7 +279,8 @@ static uint32_t read_als_adc_ch2_value(struct ltr506_data *ltr506)
 	/* read data bytes from data regs */
 	ret = I2C_Read(buffer, sizeof(buffer));
 	if (ret < 0) {
-		dev_err(&ltr506->i2c_client->dev, "%s Unable to read als adc ch2 values\n", __func__);
+		dev_err(&ltr506->i2c_client->dev, "%s Unable to read als adc"
+		        " ch2 values\n", __func__);
 		return 0;
 	}
 
@@ -283,61 +288,54 @@ static uint32_t read_als_adc_ch2_value(struct ltr506_data *ltr506)
 	return value;
 }
 
-
-/* Read ADC Value */
-static uint16_t read_adc_value(struct ltr506_data *ltr506)
+/* Read ADC ALS Value */
+static int read_adc_value_als(struct ltr506_data *ltr506)
 {
 	int ret;
-	uint16_t value;
-	char buffer[2];
-
-	switch (ltr506->mode) {
-		case 0 :
-			/* ALS */
-			buffer[0] = LTR506_ALS_DATA_0;
-			break;
-
-		case 1 :
-			/* PS */
-			buffer[0] = LTR506_PS_DATA_0;
-			break;
-	}
+	int val;
+	uint8_t buf[2] = {LTR506_ALS_DATA_0};
 
 	/* read data bytes from data regs */
-	ret = I2C_Read(buffer, sizeof(buffer));
+	ret = I2C_Read(buf, sizeof(buf));
 	if (ret < 0) {
-		dev_err(&ltr506->i2c_client->dev, "%s | 0x%02X", __func__, buffer[0]);
+		dev_err(&ltr506->i2c_client->dev, "%s addr:0x%02X\n", __func__,
+		        buf[0]);
 		return ret;
 	}
 
-	value = (uint16_t)buffer[0] | ((uint16_t)buffer[1] << 8);
-	dev_dbg(&ltr506->i2c_client->dev, "%s | mode-%d(0=als, 1=ps) : value = 0x%04X\n", __func__, ltr506->mode, value);
+	val = buf[0] | (buf[1] << 8);
+	dev_dbg(&ltr506->i2c_client->dev, "%s value = 0x%d\n", __func__, val);
 
-	switch (ltr506->mode) {
-		case 0 :
-			/* ALS */
-			/* NOTE: Currently data structure is 16 bits so this
-			 * check is here for completeness.
-			 */
-			if (value > LTR506_ALS_MAX_MEASURE_VAL) {
-				dev_err(&ltr506->i2c_client->dev,
-				        "%s: PS Value Error: 0x%X\n", __func__,
-				        value);
-			}
-			value &= LTR506_ALS_VALID_MEASURE_MASK;
-			break;
-
-		case 1 :
-			/* PS */
-			if (value > LTR506_PS_MAX_MEASURE_VAL) {
-				dev_err(&ltr506->i2c_client->dev,
-				        "%s: PS Value Error: 0x%X\n", __func__,
-				        value);
-			}
-			value &= LTR506_PS_VALID_MEASURE_MASK;
-			break;
+	if (val > LTR506_ALS_MAX_MEASURE_VAL) {
+		dev_err(&ltr506->i2c_client->dev, "%s: ALS overflow:%d\n",
+		        __func__, val);
 	}
-	return value;
+	return (val & LTR506_ALS_VALID_MEASURE_MASK);
+}
+
+/* Read ADC PS Value */
+static int read_adc_value_ps(struct ltr506_data *ltr506)
+{
+	int ret;
+	int val;
+	uint8_t buf[2] = {LTR506_PS_DATA_0};
+
+	/* read data bytes from data regs */
+	ret = I2C_Read(buf, sizeof(buf));
+	if (ret < 0) {
+		dev_err(&ltr506->i2c_client->dev, "%s addr:0x%02X\n", __func__,
+		        buf[0]);
+		return ret;
+	}
+
+	val = buf[0] | (buf[1] << 8);
+	dev_dbg(&ltr506->i2c_client->dev, "%s value = 0x%d\n", __func__, val);
+
+	if (val > LTR506_PS_MAX_MEASURE_VAL) {
+		dev_err(&ltr506->i2c_client->dev, "%s: PS overflow:%d\n",
+		        __func__, val);
+	}
+	return (val & LTR506_PS_VALID_MEASURE_MASK);
 }
 
 /* Set an upper and lower threshold where interrupts will *not* be generated.
@@ -418,8 +416,7 @@ static void report_ps_input_event(struct ltr506_data *ltr506)
 	uint16_t adc_value;
 	int thresh_hi, thresh_lo, thresh_delta;
 
-	ltr506->mode = 1;
-	adc_value = read_adc_value(ltr506);
+	adc_value = read_adc_value_ps(ltr506);
 
 	input_report_abs(ltr506->ps_input_dev, ABS_DISTANCE, adc_value);
 	input_sync(ltr506->ps_input_dev);
@@ -439,34 +436,66 @@ static void report_ps_input_event(struct ltr506_data *ltr506)
 		thresh_hi = LTR506_PS_MAX_MEASURE_VAL;
 	rc = set_ps_range(ltr506, (uint16_t)thresh_lo, (uint16_t)thresh_hi);
 	if (rc < 0) {
-		dev_err(&ltr506->i2c_client->dev, "%s : PS Thresholds Write Fail...\n", __func__);
+		dev_err(&ltr506->i2c_client->dev, "%s : PS Thresholds Write"
+		        " Fail...\n", __func__);
 	}
+}
+
+/* Read raw sensor value which bypasses the LUX filter.
+   The LUX filter has logic to remove 60Hz frequencies which
+   was proven to be broken for incandescent lights in previous
+   versions of this sensor. */
+static int _report_als_hack(struct ltr506_data *ltr506) {
+	static int cnt = 0;
+	int adc_val;
+	int adc_val_raw_ch1;
+	int adc_val_raw_ch2;
+	/* Read the RAW values.  We are stuffing a 20 bit value into
+	   a 16 bit register so drop 4 LSBs */
+	adc_val_raw_ch1 = (read_als_adc_ch1_value(ltr506) >> 4);
+	adc_val_raw_ch2 = (read_als_adc_ch2_value(ltr506) >> 4);
+
+	/* Now re-read the filtered value for good measure */
+	adc_val = read_adc_value_als(ltr506);
+
+	/* Check if false darkness value */
+	if (adc_val_raw_ch1 != 0 || adc_val_raw_ch2 != 0) {
+		dev_warn(&ltr506->i2c_client->dev, "%s Not dark adc_val:%d"
+		         " adc_val_raw_ch1:%d adc_val_raw_ch2:%d\n",
+		         __func__, adc_val, adc_val_raw_ch1,
+		         adc_val_raw_ch2);
+	}
+
+	/* We don't want to spam log so only log the first few.
+	   TODO(cmanton) Remove this logging when behavior understood */
+	if (++cnt < 10) {
+		dev_info(&ltr506->i2c_client->dev, "%s cnt:%d adc_val:%d"
+		         " adc_val_raw_ch1:%d adc_val_raw_ch2:%d\n",
+		         __func__, cnt, adc_val, adc_val_raw_ch1,
+		         adc_val_raw_ch2);
+	}
+	return adc_val;
 }
 
 /* Report ALS input event and select range */
 static void report_als_input_event(struct ltr506_data *ltr506)
 {
 	int rc;
-	uint16_t adc_value;
+	int adc_value;
 	int thresh_hi, thresh_lo, thresh_delta;
 
-	ltr506->mode = 0;
-	if (ltr506->ps_must_be_on_while_als_on == 1) {
-		uint16_t adc_value_tmp;
-		/* Hack to read incandescent light with PS on.
-		 * We are stuffing a 20 bit value into a 16 bit register so
-		 * drop last 4 bits */
-		adc_value = (read_als_adc_ch1_value(ltr506) >> 4);
-		adc_value_tmp = read_adc_value(ltr506);
-		dev_dbg(&ltr506->i2c_client->dev, "%s adc_value:%d ch1_adc_value:%d \n",
-		         __func__, adc_value_tmp, adc_value);
-	} else {
-		adc_value = read_adc_value(ltr506);
+	adc_value = read_adc_value_als(ltr506);
+
+	/* Special case adc value to see if it's a true zero (darkness) or
+	   if we are using a workaround to bypass the LUX filter. */
+	if (adc_value == 0 || ltr506->ps_must_be_on_while_als_on == 1) {
+		adc_value = _report_als_hack(ltr506);
 	}
 
 	if (ltr506->als_from_suspend && (ltr506->als_last_value == adc_value)) {
 		adc_value = ltr506->als_last_value ^ 0x0001;
-		dev_info(&ltr506->i2c_client->dev, "%s Flipping lsb to force fresh value through input subsystem value:%d\n",
+		dev_info(&ltr506->i2c_client->dev, "%s Flipping lsb to force"
+		         " fresh value through input subsystem value:%d\n",
 		         __func__, adc_value);
 	}
 	ltr506->als_from_suspend = 0;
@@ -489,7 +518,8 @@ static void report_als_input_event(struct ltr506_data *ltr506)
 		thresh_hi = LTR506_ALS_MAX_MEASURE_VAL;
 	rc = set_als_range(ltr506, (uint16_t)thresh_lo, (uint16_t)thresh_hi);
 	if (rc < 0) {
-		dev_err(&ltr506->i2c_client->dev, "%s : ALS Thresholds Write Fail...\n", __func__);
+		dev_err(&ltr506->i2c_client->dev, "%s : ALS Thresholds Write"
+		        " Fail...\n", __func__);
 	}
 }
 
@@ -505,7 +535,7 @@ static void ltr506_schedwork(struct work_struct *work)
 	buffer[0] = LTR506_ALS_PS_STATUS;
 	ret = I2C_Read(buffer, 1);
 	if (ret < 0) {
-		dev_err(&ltr506->i2c_client->dev, "%s | 0x%02X", __func__, buffer[0]);
+		dev_err(&ltr506->i2c_client->dev, "%s | 0x%02X\n", __func__, buffer[0]);
 		/* Re-enable interrupts */
 		enable_irq(ltr506->irq);
 		return;
@@ -607,12 +637,15 @@ static int ltr506_gpio_irq(struct ltr506_data *ltr506)
 	int rc = 0;
 	unsigned long irq_flags = IRQF_TRIGGER_LOW | IRQF_SHARED;
 
-	dev_info(&ltr506->i2c_client->dev, "%s: Using shared interrupt with wink detector\n", __func__);
+	dev_info(&ltr506->i2c_client->dev, "%s: Using shared interrupt with"
+	         " wink detector\n", __func__);
 
 	rc = gpio_request(ltr506->gpio_int_no, DEVICE_NAME);
 	if (rc < 0) {
 		if (rc == -EBUSY) {
-			dev_info(&ltr506->i2c_client->dev, "%s: gpio request busy; assuming glasshub already obtained it\n", __func__);
+			dev_info(&ltr506->i2c_client->dev, "%s: gpio request"
+			         " busy; assuming glasshub already obtained it\n",
+			         __func__);
 		} else {
 			dev_err(&ltr506->i2c_client->dev,"%s: GPIO %d Request Fail"
 			        " (%d)\n", __func__, ltr506->gpio_int_no, rc);
@@ -623,7 +656,9 @@ static int ltr506_gpio_irq(struct ltr506_data *ltr506)
 	rc = gpio_direction_input(ltr506->gpio_int_no);
 	if (rc < 0) {
 		if (rc == -EBUSY) {
-			dev_info(&ltr506->i2c_client->dev, "%s: gpio input direction request busy; assuming glasshub already obtained it\n", __func__);
+			dev_info(&ltr506->i2c_client->dev, "%s: gpio input"
+			         " direction request busy; assuming glasshub"
+			         " already obtained it\n", __func__);
 		} else {
 			dev_err(&ltr506->i2c_client->dev, "%s: Set GPIO %d as Input"
 			        " Fail (%d)\n", __func__, ltr506->gpio_int_no, rc);
@@ -692,7 +727,7 @@ static int ps_led_setup(struct ltr506_data *ltr506)
 	buffer[2] = ltr506->led_pulse_count;
 	ret = I2C_Write(buffer, 3);
 	if (ret < 0) {
-		dev_err(&ltr506->i2c_client->dev, "%s | 0x%02X", __func__, buffer[0]);
+		dev_err(&ltr506->i2c_client->dev, "%s | 0x%02X\n", __func__, buffer[0]);
 	}
 
 	return ret;
@@ -708,7 +743,7 @@ static int ps_meas_rate_setup(struct ltr506_data *ltr506)
 	buffer[1] = ltr506->ps_meas_rate;
 	ret = I2C_Write(buffer, 2);
 	if (ret < 0)
-		dev_err(&ltr506->i2c_client->dev, "%s | 0x%02X", __func__, buffer[0]);
+		dev_err(&ltr506->i2c_client->dev, "%s | 0x%02X\n", __func__, buffer[0]);
 
 	return ret;
 }
@@ -726,7 +761,7 @@ static int als_meas_rate_setup(struct ltr506_data *ltr506)
 		| (ltr506->als_meas_rate << ALS_MEAS_RATE_SHIFT);
 	ret = I2C_Write(buffer, 2);
 	if (ret < 0)
-		dev_err(&ltr506->i2c_client->dev, "%s | 0x%02X", __func__, buffer[0]);
+		dev_err(&ltr506->i2c_client->dev, "%s | 0x%02X\n", __func__, buffer[0]);
 
 	return ret;
 }
@@ -744,7 +779,8 @@ static int ps_enable(struct ltr506_data *ltr506)
 	/* Set thresholds so that interrupts will not be suppressed */
 	rc = set_ps_range(ltr506, LTR506_PS_MIN_MEASURE_VAL, LTR506_PS_MIN_MEASURE_VAL);
 	if (rc < 0) {
-		dev_err(&ltr506->i2c_client->dev, "%s : PS Thresholds Write Fail...\n", __func__);
+		dev_err(&ltr506->i2c_client->dev, "%s : PS Thresholds Write Fail...\n",
+		        __func__);
 		return rc;
 	}
 
@@ -752,19 +788,23 @@ static int ps_enable(struct ltr506_data *ltr506)
 		/* Allows this interrupt to wake the system */
 		rc = irq_set_irq_wake(ltr506->irq, 1);
 		if (rc < 0) {
-			dev_err(&ltr506->i2c_client->dev, "%s: IRQ-%d WakeUp Enable Fail...\n", __func__, ltr506->irq);
+			dev_err(&ltr506->i2c_client->dev, "%s: IRQ-%d WakeUp"
+			        " Enable Fail...\n", __func__, ltr506->irq);
 			return rc;
 		}
-		dev_info(&ltr506->i2c_client->dev, "%s: Allowing interrupts to wake system\n", __func__);
+		dev_info(&ltr506->i2c_client->dev, "%s: Allowing interrupts to"
+		         " wake system\n", __func__);
 	}
 
 	rc = _ltr506_set_bit(ltr506->i2c_client, SET_BIT, LTR506_PS_CONTR, PS_MODE);
 	if (rc < 0) {
-		dev_err(&ltr506->i2c_client->dev, "%s: PS Enable Fail...\n", __func__);
+		dev_err(&ltr506->i2c_client->dev, "%s: PS Enable Fail...\n",
+		        __func__);
 		return rc;
 	}
 
-	dev_info(&ltr506->i2c_client->dev, "%s Turned on proximity sensor\n", __func__);
+	dev_info(&ltr506->i2c_client->dev, "%s Turned on proximity sensor\n",
+	         __func__);
 	ltr506->ps_enable_flag = 1;
 	return rc;
 }
@@ -775,7 +815,8 @@ static int ps_disable(struct ltr506_data *ltr506)
 	int rc = 0;
 
 	if (ltr506->ps_enable_flag == 0) {
-		dev_info(&ltr506->i2c_client->dev, "%s: already disabled\n", __func__);
+		dev_info(&ltr506->i2c_client->dev, "%s: already disabled\n",
+		         __func__);
 		return 0;
 	}
 
@@ -783,18 +824,21 @@ static int ps_disable(struct ltr506_data *ltr506)
 	if (ltr506->gpio_int_wake_dev && !ltr506->ps_must_be_on_while_als_on) {
 		rc = irq_set_irq_wake(ltr506->irq, 0);
 		if (rc < 0) {
-			dev_err(&ltr506->i2c_client->dev, "%s: IRQ-%d WakeUp Disable Fail...\n", __func__, ltr506->irq);
+			dev_err(&ltr506->i2c_client->dev, "%s: IRQ-%d WakeUp"
+			        " Disable Fail...\n", __func__, ltr506->irq);
 			return rc;
 		}
 	}
 
 	rc = _ltr506_set_bit(ltr506->i2c_client, CLR_BIT, LTR506_PS_CONTR, PS_MODE);
 	if (rc < 0) {
-		dev_err(&ltr506->i2c_client->dev, "%s: PS Disable Fail...\n", __func__);
+		dev_err(&ltr506->i2c_client->dev, "%s: PS Disable Fail...\n",
+		        __func__);
 		return rc;
 	}
 
-	dev_info(&ltr506->i2c_client->dev, "%s Turned off proximity sensor\n", __func__);
+	dev_info(&ltr506->i2c_client->dev, "%s Turned off proximity sensor\n",
+	         __func__);
 	ltr506->ps_enable_flag = 0;
 	return rc;
 }
@@ -839,10 +883,12 @@ static int als_enable(struct ltr506_data *ltr506)
 	int rc = 0;
 
 	if (ltr506->als_enable_flag != 0) {
-		dev_err(&ltr506->i2c_client->dev, "%s: ALS already enabled...disabling first\n", __func__);
+		dev_err(&ltr506->i2c_client->dev, "%s: ALS already enabled..."
+		        " disabling first\n", __func__);
 		rc = als_disable(ltr506);
 		if (rc) {
-			dev_err(&ltr506->i2c_client->dev, "%s: Unable to disable ALS\n", __func__);
+			dev_err(&ltr506->i2c_client->dev, "%s: Unable to"
+			        " disable ALS\n", __func__);
 			return rc;
 		}
 		/* Wait some amount of time for the ALS to disable. */
@@ -853,7 +899,8 @@ static int als_enable(struct ltr506_data *ltr506)
 	 * ALS to operate properly. */
 	if (ltr506->ps_must_be_on_while_als_on) {
 		if (ps_enable(ltr506)) {
-			dev_err(&ltr506->i2c_client->dev, "%s : Unable to turn on PS", __func__);
+			dev_err(&ltr506->i2c_client->dev, "%s : Unable to turn"
+			        " on PS", __func__);
 			return -EIO;
 		}
 		/* Wait some amount of time for the PS to get started. */
@@ -863,16 +910,19 @@ static int als_enable(struct ltr506_data *ltr506)
 	/* Clear thresholds so that interrupts will not be suppressed */
 	rc = set_als_range(ltr506, LTR506_ALS_MAX_MEASURE_VAL, LTR506_ALS_MAX_MEASURE_VAL);
 	if (rc < 0) {
-		dev_err(&ltr506->i2c_client->dev, "%s : ALS Thresholds Write Fail...\n", __func__);
+		dev_err(&ltr506->i2c_client->dev, "%s : ALS Thresholds Write"
+		        " Fail...\n", __func__);
 		return rc;
 	}
 
 	rc = _ltr506_set_bit(ltr506->i2c_client, SET_BIT, LTR506_ALS_CONTR, ALS_MODE);
 	if (rc < 0) {
-		dev_err(&ltr506->i2c_client->dev, "%s: ALS Enable Fail...\n", __func__);
+		dev_err(&ltr506->i2c_client->dev, "%s: ALS Enable Fail...\n",
+		        __func__);
 		return rc;
 	}
-	dev_info(&ltr506->i2c_client->dev, "%s Turned on ambient light sensor\n", __func__);
+	dev_info(&ltr506->i2c_client->dev, "%s Turned on ambient light sensor\n",
+	         __func__);
 	ltr506->als_enable_flag = 1;
 
 	return rc;
@@ -882,16 +932,19 @@ static int als_disable(struct ltr506_data *ltr506)
 {
 	int rc = 0;
 	if (ltr506->als_enable_flag != 1) {
-		dev_err(&ltr506->i2c_client->dev, "%s : ALS already disabled...\n", __func__);
+		dev_err(&ltr506->i2c_client->dev, "%s : ALS already disabled...\n",
+		        __func__);
 		return rc;
 	}
 
 	rc = _ltr506_set_bit(ltr506->i2c_client, CLR_BIT, LTR506_ALS_CONTR, ALS_MODE);
 	if (rc < 0) {
-		dev_err(&ltr506->i2c_client->dev,"%s: ALS Disable Fail...\n", __func__);
+		dev_err(&ltr506->i2c_client->dev,"%s: ALS Disable Fail...\n",
+		        __func__);
 		return rc;
 	}
-	dev_info(&ltr506->i2c_client->dev, "%s Turned off ambient light sensor\n", __func__);
+	dev_info(&ltr506->i2c_client->dev, "%s Turned off ambient light sensor\n",
+	         __func__);
 	ltr506->als_enable_flag = 0;
 
 	/* NOTE(CMM) This part requires a workaround to enable the PS in order for the
@@ -913,7 +966,8 @@ static int als_open(struct inode *inode, struct file *file)
 	int rc = 0;
 
 	if (ltr506->als_opened) {
-		dev_err(&ltr506->i2c_client->dev, "%s: ALS already Opened...\n", __func__);
+		dev_err(&ltr506->i2c_client->dev, "%s: ALS already Opened...\n",
+		        __func__);
 		rc = -EBUSY;
 	}
 	ltr506->als_opened = 1;
@@ -947,8 +1001,7 @@ static ssize_t ps_adc_show(struct device *dev,
 	int ret;
 	struct ltr506_data *ltr506 = sensor_info;
 
-	ltr506->mode = 1;
-	value = read_adc_value(ltr506);
+	value = read_adc_value_ps(ltr506);
 	ret = sprintf(buf, "%d\n", value);
 
 	return ret;
@@ -969,7 +1022,8 @@ static ssize_t ps_led_show(struct device *dev,
 
 	ret = I2C_Read(buffer, 1);
 	if (ret < 0) {
-		dev_err(&ltr506->i2c_client->dev, "%s | 0x%02X", __func__, buffer[0]);
+		dev_err(&ltr506->i2c_client->dev, "%s | 0x%02X\n", __func__,
+		        buffer[0]);
 		return ret;
 	}
 	value = buffer[0];
@@ -1009,12 +1063,11 @@ static DEVICE_ATTR(ps_led, 0666, ps_led_show, ps_led_store);
 static ssize_t als_adc_show(struct device *dev,
                             struct device_attribute *attr, char *buf)
 {
-	uint16_t value;
+	int value;
 	int ret;
 	struct ltr506_data *ltr506 = sensor_info;
 
-	ltr506->mode = 0;
-	value = read_adc_value(ltr506);
+	value = read_adc_value_als(ltr506);
 	ret = sprintf(buf, "%d\n", value);
 
 	return ret;
@@ -1033,7 +1086,7 @@ static ssize_t als_enable_show(struct device *dev,
 	buffer[0] = LTR506_ALS_CONTR;
 	ret = I2C_Read(buffer, 1);
 	if (ret < 0) {
-		dev_err(&ltr506->i2c_client->dev, "%s | 0x%02X", __func__,
+		dev_err(&ltr506->i2c_client->dev, "%s | 0x%02X\n", __func__,
 		        buffer[0]);
 		return ret;
 	}
@@ -1079,7 +1132,8 @@ static ssize_t als_gain_show(struct device *dev,
 	buffer[0] = LTR506_ALS_CONTR;
 	rc = I2C_Read(buffer, 1);
 	if (rc < 0) {
-		dev_err(&ltr506->i2c_client->dev, "%s | 0x%02X", __func__, buffer[0]);
+		dev_err(&ltr506->i2c_client->dev, "%s | 0x%02X\n", __func__,
+		        buffer[0]);
 		return rc;
 	}
 
@@ -1130,7 +1184,8 @@ static ssize_t als_resolution_show(struct device *dev,
 
 	rc = I2C_Read(buffer, 1);
 	if (rc < 0) {
-		dev_err(&ltr506->i2c_client->dev, "%s | 0x%02X", __func__, buffer[0]);
+		dev_err(&ltr506->i2c_client->dev, "%s | 0x%02X\n", __func__,
+		        buffer[0]);
 		return rc;
 	}
 
@@ -1173,7 +1228,7 @@ static ssize_t als_meas_rate_show(struct device *dev,
 
 	ret = I2C_Read(buffer, 1);
 	if (ret < 0) {
-		dev_err(&ltr506->i2c_client->dev, "%s | 0x%02X", __func__,
+		dev_err(&ltr506->i2c_client->dev, "%s | 0x%02X\n", __func__,
 		        buffer[0]);
 		return ret;
 	}
@@ -1243,7 +1298,8 @@ static ssize_t ps_enable_show(struct device *dev,
 	buffer[0] = LTR506_PS_CONTR;
 	ret = I2C_Read(buffer, 1);
 	if (ret < 0) {
-		dev_err(&ltr506->i2c_client->dev, "%s | 0x%02X", __func__, buffer[0]);
+		dev_err(&ltr506->i2c_client->dev, "%s | 0x%02X\n", __func__,
+		        buffer[0]);
 		return ret;
 	}
 	value = buffer[0];
@@ -1287,7 +1343,8 @@ static ssize_t ps_gain_show(struct device *dev,
 	buffer[0] = LTR506_PS_CONTR;
 	rc = I2C_Read(buffer, 1);
 	if (rc < 0) {
-		dev_err(&ltr506->i2c_client->dev, "%s | 0x%02X", __func__, buffer[0]);
+		dev_err(&ltr506->i2c_client->dev, "%s | 0x%02X\n", __func__,
+		        buffer[0]);
 		return rc;
 	}
 
@@ -1327,7 +1384,8 @@ static ssize_t ps_pulse_cnt_show(struct device *dev,
 
 	rc = I2C_Read(buffer, 1);
 	if (rc < 0) {
-		dev_err(&ltr506->i2c_client->dev, "%s | 0x%02X", __func__, buffer[0]);
+		dev_err(&ltr506->i2c_client->dev, "%s | 0x%02X\n", __func__,
+		        buffer[0]);
 		return rc;
 	}
 
@@ -1353,7 +1411,8 @@ static ssize_t ps_pulse_cnt_store(struct device *dev,
 	buffer[1] = ps_pulse_cnt;
 	rc = I2C_Write(buffer, 2);
 	if (rc < 0) {
-		dev_err(&ltr506->i2c_client->dev, "%s | 0x%02X", __func__, buffer[0]);
+		dev_err(&ltr506->i2c_client->dev, "%s | 0x%02X\n", __func__,
+		        buffer[0]);
 		return -EIO;
 	}
 
@@ -1372,7 +1431,8 @@ static ssize_t ps_meas_rate_show(struct device *dev,
 
 	rc = I2C_Read(buffer, 1);
 	if (rc < 0) {
-		dev_err(&ltr506->i2c_client->dev, "%s | 0x%02X", __func__, buffer[0]);
+		dev_err(&ltr506->i2c_client->dev, "%s | 0x%02X\n", __func__,
+		        buffer[0]);
 		return rc;
 	}
 
@@ -1407,7 +1467,8 @@ static ssize_t ps_threshold_show(struct device *dev,
                                  struct device_attribute *attr, char *buf)
 {
 	struct ltr506_data *ltr506 = sensor_info;
-	return sprintf(buf, "%u %u\n", ltr506->ps_lowthresh, ltr506->ps_highthresh);
+	return sprintf(buf, "%u %u\n", ltr506->ps_lowthresh,
+	               ltr506->ps_highthresh);
 }
 
 static ssize_t ps_threshold_store(struct device *dev,
@@ -1516,9 +1577,11 @@ static ssize_t als_filter_interrupts_store(struct device *dev,
 	}
 
 	/* Clear thresholds so that interrupts will not be suppressed */
-	rc = set_als_range(ltr506, LTR506_ALS_MAX_MEASURE_VAL, LTR506_ALS_MAX_MEASURE_VAL);
+	rc = set_als_range(ltr506, LTR506_ALS_MAX_MEASURE_VAL,
+	                   LTR506_ALS_MAX_MEASURE_VAL);
 	if (rc < 0) {
-		dev_err(&ltr506->i2c_client->dev, "%s : ALS Thresholds Write Fail...\n", __func__);
+		dev_err(&ltr506->i2c_client->dev, "%s : ALS Thresholds Write"
+		        " Fail...\n", __func__);
 		return -EIO;
 	}
 
@@ -1552,7 +1615,8 @@ static ssize_t ps_filter_interrupts_store(struct device *dev,
 
 	rc = set_ps_range(ltr506, LTR506_PS_MIN_MEASURE_VAL, LTR506_PS_MIN_MEASURE_VAL);
 	if (rc < 0) {
-		dev_err(&ltr506->i2c_client->dev, "%s : PS Thresholds Write Fail...\n", __func__);
+		dev_err(&ltr506->i2c_client->dev, "%s : PS Thresholds Write"
+		        " Fail...\n", __func__);
 		return -EIO;
 	}
 	ltr506->ps_filter_interrupts = ps_filter_interrupts;
@@ -1579,7 +1643,8 @@ static void sysfs_register_device(struct i2c_client *client) {
 	rc += device_create_file(&client->dev, &dev_attr_ps_filter_interrupts);
 
 	if (rc) {
-		dev_err(&client->dev, "%s Unable to create sysfs files\n", __func__);
+		dev_err(&client->dev, "%s Unable to create sysfs files\n",
+		        __func__);
 	} else {
 		dev_dbg(&client->dev, "%s Created sysfs files\n", __func__);
 	}
@@ -1599,9 +1664,11 @@ static void sysfs_register_als_device(struct i2c_client *client, struct device *
 	rc += device_create_file(dev, &dev_attr_als_threshold);
 	rc += device_create_file(dev, &dev_attr_als_filter_interrupts);
 	if (rc) {
-		dev_err(&client->dev, "%s Unable to create als input sysfs files\n", __func__);
+		dev_err(&client->dev, "%s Unable to create als input sysfs"
+		        " files\n", __func__);
 	} else {
-		dev_dbg(&client->dev, "%s Created als input sysfs files\n", __func__);
+		dev_dbg(&client->dev, "%s Created als input sysfs files\n",
+		        __func__);
 	}
 }
 
@@ -1621,9 +1688,11 @@ static void sysfs_register_ps_device(struct i2c_client *client, struct device *d
 	rc += device_create_file(dev, &dev_attr_ps_threshold);
 	rc += device_create_file(dev, &dev_attr_ps_filter_interrupts);
 	if (rc) {
-		dev_err(&client->dev, "%s Unable to create ps input sysfs files\n", __func__);
+		dev_err(&client->dev, "%s Unable to create ps input sysfs"
+		        " files\n", __func__);
 	} else {
-		dev_dbg(&client->dev, "%s Created ps input sysfs files\n", __func__);
+		dev_dbg(&client->dev, "%s Created ps input sysfs files\n",
+		        __func__);
 	}
 }
 
@@ -1634,7 +1703,8 @@ static int als_setup_input_device(struct ltr506_data *ltr506)
 
 	ltr506->als_input_dev = input_allocate_device();
 	if (!ltr506->als_input_dev) {
-		dev_err(&ltr506->i2c_client->dev, "%s: ALS Input Allocate Device Fail...\n", __func__);
+		dev_err(&ltr506->i2c_client->dev, "%s: ALS Input Allocate"
+		        " Device Fail...\n", __func__);
 		return -ENOMEM;
 	}
 	ltr506->als_input_dev->name = "ltr506_als";
@@ -1643,13 +1713,15 @@ static int als_setup_input_device(struct ltr506_data *ltr506)
 
 	ret = input_register_device(ltr506->als_input_dev);
 	if (ret < 0) {
-		dev_err(&ltr506->i2c_client->dev, "%s: ALS Register Input Device Fail...\n", __func__);
+		dev_err(&ltr506->i2c_client->dev, "%s: ALS Register Input"
+		        " Device Fail...\n", __func__);
 		goto err_als_register_input_device;
 	}
 
 	ret = misc_register(&als_misc);
 	if (ret < 0) {
-		dev_err(&ltr506->i2c_client->dev, "%s: ALS Register Misc Device Fail...\n", __func__);
+		dev_err(&ltr506->i2c_client->dev, "%s: ALS Register Misc"
+		        " Device Fail...\n", __func__);
 		goto err_als_register_misc_device;
 	}
 
@@ -1669,7 +1741,8 @@ static int ps_setup_input_device(struct ltr506_data *ltr506)
 
 	ltr506->ps_input_dev = input_allocate_device();
 	if (!ltr506->ps_input_dev) {
-		dev_err(&ltr506->i2c_client->dev, "%s: PS Input Allocate Device Fail...\n", __func__);
+		dev_err(&ltr506->i2c_client->dev, "%s: PS Input Allocate Device"
+		        " Fail...\n", __func__);
 		return -ENOMEM;
 	}
 	ltr506->ps_input_dev->name = "ltr506_ps";
@@ -1678,13 +1751,15 @@ static int ps_setup_input_device(struct ltr506_data *ltr506)
 
 	ret = input_register_device(ltr506->ps_input_dev);
 	if (ret < 0) {
-		dev_err(&ltr506->i2c_client->dev, "%s: PS Register Input Device Fail...\n", __func__);
+		dev_err(&ltr506->i2c_client->dev, "%s: PS Register Input Device"
+		        " Fail...\n", __func__);
 		goto err_ps_register_input_device;
 	}
 
 	ret = misc_register(&ps_misc);
 	if (ret < 0) {
-		dev_err(&ltr506->i2c_client->dev, "%s: PS Register Misc Device Fail...\n", __func__);
+		dev_err(&ltr506->i2c_client->dev, "%s: PS Register Misc Device"
+		        " Fail...\n", __func__);
 		goto err_ps_register_misc_device;
 	}
 
@@ -1705,7 +1780,7 @@ static int _check_part_id(struct ltr506_data *ltr506)
 	buffer[0] = LTR506_PART_ID;
 	ret = I2C_Read(buffer, 1);
 	if (ret < 0) {
-		dev_err(&ltr506->i2c_client->dev, "%s: Read failure :0x%02X",
+		dev_err(&ltr506->i2c_client->dev, "%s: Read failure :0x%02X\n",
 		        __func__, buffer[0]);
 		return -1;
 	}
@@ -1729,7 +1804,8 @@ static int ltr506_setup(struct ltr506_data *ltr506)
 	/* Reset the devices */
 	ret = _ltr506_set_bit(ltr506->i2c_client, SET_BIT, LTR506_ALS_CONTR, ALS_SW_RESET);
 	if (ret < 0) {
-		dev_err(&ltr506->i2c_client->dev, "%s: ALS reset fail...\n", __func__);
+		dev_err(&ltr506->i2c_client->dev, "%s: ALS reset fail...\n",
+		        __func__);
 		goto err_out1;
 	}
 
@@ -1738,16 +1814,19 @@ static int ltr506_setup(struct ltr506_data *ltr506)
 
 	/* Do another part read to ensure we have exited reset */
 	if (_check_part_id(ltr506) < 0) {
-		dev_err(&ltr506->i2c_client->dev, "%s: Part ID Read Fail after reset...\n", __func__);
+		dev_err(&ltr506->i2c_client->dev, "%s: Part ID Read Fail after"
+		        " reset...\n", __func__);
 		goto err_out1;
 	}
 
 	ret = ltr506_gpio_irq(ltr506);
 	if (ret < 0) {
-		dev_warn(&ltr506->i2c_client->dev, "%s: Unable to setup interrupts; retrying with polling...\n", __func__);
+		dev_warn(&ltr506->i2c_client->dev, "%s: Unable to setup"
+		         " interrupts; retrying with polling...\n", __func__);
 		ret = ltr506_setup_polling(ltr506);
 		if (ret < 0) {
-			dev_err(&ltr506->i2c_client->dev, "%s: GPIO Request Fail...\n", __func__);
+			dev_err(&ltr506->i2c_client->dev, "%s: GPIO Request"
+			        " Fail...\n", __func__);
 			goto err_out1;
 		}
 		ltr506->use_polling = 1;
@@ -1757,33 +1836,39 @@ static int ltr506_setup(struct ltr506_data *ltr506)
 	/* Set count of measurements outside data range before interrupt is generated */
 	ret = _ltr506_set_bit(ltr506->i2c_client, SET_BIT, LTR506_INTERRUPT_PRST, 0x00);
 	if (ret < 0) {
-		dev_err(&ltr506->i2c_client->dev, "%s: ALS Set Persist Fail...\n", __func__);
+		dev_err(&ltr506->i2c_client->dev, "%s: ALS Set Persist Fail...\n",
+		        __func__);
 		goto err_out2;
 	}
 
 	if (!ltr506->use_polling) {
 		ret = _ltr506_set_bit(ltr506->i2c_client, SET_BIT, LTR506_INTERRUPT_PRST, 0x00);
 		if (ret < 0) {
-			dev_err(&ltr506->i2c_client->dev,"%s: PS Set Persist Fail...\n", __func__);
+			dev_err(&ltr506->i2c_client->dev,"%s: PS Set Persist Fail...\n",
+			        __func__);
 			goto err_out2;
 		}
-		dev_dbg(&ltr506->i2c_client->dev, "%s: Set ltr506 persists\n", __func__);
+		dev_dbg(&ltr506->i2c_client->dev, "%s: Set ltr506 persists\n",
+		        __func__);
 
 		/* Enable interrupts on the device and clear only when status is read */
 		ret = _ltr506_set_bit(ltr506->i2c_client, CLR_BIT, LTR506_INTERRUPT, 0x08);
 		ret = _ltr506_set_bit(ltr506->i2c_client, SET_BIT, LTR506_INTERRUPT, INTERRUPT_MODE);
 		if (ret < 0) {
-			dev_err(&ltr506->i2c_client->dev, "%s: Enabled interrupts failed...\n", __func__);
+			dev_err(&ltr506->i2c_client->dev, "%s: Enabled"
+			        " interrupts failed...\n", __func__);
 			goto err_out2;
 		}
-		dev_info(&ltr506->i2c_client->dev, "%s Enabled interrupt to device\n", __func__);
+		dev_info(&ltr506->i2c_client->dev, "%s Enabled interrupt to"
+		         " device\n", __func__);
 	}
 
 	/* Set ALS measurement gain */
 	ret = _ltr506_set_field(ltr506->i2c_client, ALS_GAIN, LTR506_ALS_CONTR,
 	                        ltr506->als_gain << ALS_GAIN_SHIFT);
 	if (ret < 0) {
-		dev_err(&ltr506->i2c_client->dev, "%s: ALS set gain fail...\n", __func__);
+		dev_err(&ltr506->i2c_client->dev, "%s: ALS set gain fail...\n",
+		        __func__);
 		goto err_out2;
 	}
 
@@ -1791,7 +1876,8 @@ static int ltr506_setup(struct ltr506_data *ltr506)
 	ret = _ltr506_set_field(ltr506->i2c_client, PS_GAIN, LTR506_PS_CONTR,
 	                        ltr506->ps_gain << PS_GAIN_SHIFT);
 	if (ret < 0) {
-		dev_err(&ltr506->i2c_client->dev, "%s: PS set gain fail...\n", __func__);
+		dev_err(&ltr506->i2c_client->dev, "%s: PS set gain fail...\n",
+		        __func__);
 		goto err_out2;
 	}
 	dev_dbg(&ltr506->i2c_client->dev, "%s: Set ltr506 gains\n", __func__);
@@ -1801,17 +1887,21 @@ static int ltr506_setup(struct ltr506_data *ltr506)
 
 	ret = ps_led_setup(ltr506);
 	if (ret < 0) {
-		dev_err(&ltr506->i2c_client->dev, "%s: PS LED Setup Fail...\n", __func__);
+		dev_err(&ltr506->i2c_client->dev, "%s: PS LED Setup Fail...\n",
+		        __func__);
 		goto err_out2;
 	}
 
 	ret = ps_meas_rate_setup(ltr506);
 	if (ret < 0) {
-		dev_err(&ltr506->i2c_client->dev, "%s: PS MeasRate Setup Fail...\n", __func__);
+		dev_err(&ltr506->i2c_client->dev, "%s: PS MeasRate Setup"
+		        " Fail...\n",
+		        __func__);
 		goto err_out2;
 	}
 
-	dev_info(&ltr506->i2c_client->dev, "%s Using part id:0x%02x\n", __func__, ltr506->part_id);
+	dev_info(&ltr506->i2c_client->dev, "%s Using part id:0x%02x\n",
+	         __func__, ltr506->part_id);
 
 	return ret;
 
@@ -1820,7 +1910,8 @@ err_out2:
 	gpio_free(ltr506->gpio_int_no);
 
 err_out1:
-	dev_err(&ltr506->i2c_client->dev, "%s Unable to setup device\n", __func__);
+	dev_err(&ltr506->i2c_client->dev, "%s Unable to setup device\n",
+	        __func__);
 	return ret;
 }
 
@@ -1830,7 +1921,8 @@ static void ltr506_early_suspend(struct early_suspend *h)
 	struct ltr506_data *ltr506 = sensor_info;
 
 	if (ltr506->is_suspend != 0) {
-		dev_err(&ltr506->i2c_client->dev, "%s Asked to suspend when already suspended\n", __func__);
+		dev_err(&ltr506->i2c_client->dev, "%s Asked to suspend when"
+		        " already suspended\n", __func__);
 		return;
 	}
 	ltr506->is_suspend = 1;
@@ -1848,9 +1940,11 @@ static void ltr506_early_suspend(struct early_suspend *h)
 	}
 
 	if (ret) {
-		dev_err(&ltr506->i2c_client->dev, "%s Unable to complete suspend\n", __func__);
+		dev_err(&ltr506->i2c_client->dev, "%s Unable to complete"
+		        " suspend\n", __func__);
 	} else {
-		dev_info(&ltr506->i2c_client->dev, "%s Suspend completed\n", __func__);
+		dev_dbg(&ltr506->i2c_client->dev, "%s Suspend completed\n",
+		        __func__);
 	}
 }
 
@@ -1860,7 +1954,8 @@ static void ltr506_late_resume(struct early_suspend *h)
 	int ret = 0;
 
 	if (ltr506->is_suspend != 1) {
-		dev_err(&ltr506->i2c_client->dev, "%s Asked to resume when not suspended\n", __func__);
+		dev_err(&ltr506->i2c_client->dev, "%s Asked to resume when"
+		        " not suspended\n", __func__);
 		return;
 	}
 	ltr506->is_suspend = 0;
@@ -1880,9 +1975,11 @@ static void ltr506_late_resume(struct early_suspend *h)
 	}
 
 	if (ret) {
-		dev_err(&ltr506->i2c_client->dev, "%s Unable to complete resume\n", __func__);
+		dev_err(&ltr506->i2c_client->dev, "%s Unable to complete"
+		        " resume\n", __func__);
 	} else {
-		dev_info(&ltr506->i2c_client->dev, "%s Resume completed\n", __func__);
+		dev_dbg(&ltr506->i2c_client->dev, "%s Resume completed\n",
+		        __func__);
 	}
 }
 
@@ -1895,7 +1992,8 @@ static int  __devinit ltr506_probe(struct i2c_client *client, const struct i2c_d
 	ltr506 = kzalloc(sizeof(struct ltr506_data), GFP_KERNEL);
 	if (!ltr506)
 	{
-		dev_err(&ltr506->i2c_client->dev, "%s: Mem Alloc Fail...\n", __func__);
+		dev_err(&ltr506->i2c_client->dev, "%s: Mem Alloc Fail...\n",
+		        __func__);
 		return -ENOMEM;
 	}
 
@@ -1914,7 +2012,8 @@ static int  __devinit ltr506_probe(struct i2c_client *client, const struct i2c_d
 	/* Parse the platform data */
 	platdata = client->dev.platform_data;
 	if (!platdata) {
-		dev_err(&ltr506->i2c_client->dev, "%s: Platform Data assign Fail...\n", __func__);
+		dev_err(&ltr506->i2c_client->dev, "%s: Platform Data assign"
+		        " Fail...\n", __func__);
 		ret = -EBUSY;
 		goto err_out;
 	}
@@ -1944,35 +2043,40 @@ static int  __devinit ltr506_probe(struct i2c_client *client, const struct i2c_d
 	ltr506->disable_ps_on_suspend = platdata->pfd_disable_ps_on_suspend;
 
 	if (_check_part_id(ltr506) < 0) {
-		dev_err(&ltr506->i2c_client->dev, "%s: Part ID Read Fail...\n", __func__);
+		dev_err(&ltr506->i2c_client->dev, "%s: Part ID Read Fail...\n",
+		        __func__);
 		goto err_out;
 	}
 
 	/* Setup and configure both the ALS and PS on the ltr506 device */
 	ret = ltr506_setup(ltr506);
 	if (ret < 0) {
-		dev_err(&ltr506->i2c_client->dev, "%s: Setup Fail...\n", __func__);
+		dev_err(&ltr506->i2c_client->dev, "%s: Setup Fail...\n",
+		        __func__);
 		goto err_out;
 	}
 
 	/* Setup the input subsystem for the ALS */
 	ret = als_setup_input_device(ltr506);
 	if (ret < 0) {
-		dev_err(&ltr506->i2c_client->dev,"%s: ALS Setup Fail...\n", __func__);
+		dev_err(&ltr506->i2c_client->dev,"%s: ALS Setup Fail...\n",
+		        __func__);
 		goto err_out;
 	}
 
 	/* Setup the input subsystem for the PS */
 	ret = ps_setup_input_device(ltr506);
 	if (ret < 0) {
-		dev_err(&ltr506->i2c_client->dev, "%s: PS Setup Fail...\n", __func__);
+		dev_err(&ltr506->i2c_client->dev, "%s: PS Setup Fail...\n",
+		        __func__);
 		goto err_out;
 	}
 
 	/* Create the workqueue for the interrup handler */
 	ltr506->workqueue = create_singlethread_workqueue("ltr506_workqueue");
 	if (!ltr506->workqueue) {
-		dev_err(&ltr506->i2c_client->dev, "%s: Create WorkQueue Fail...\n", __func__);
+		dev_err(&ltr506->i2c_client->dev, "%s: Create WorkQueue"
+		        " Fail...\n", __func__);
 		ret = -ENOMEM;
 		goto err_out;
 	}
