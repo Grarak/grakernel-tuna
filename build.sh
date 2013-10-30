@@ -45,9 +45,9 @@ read kernelversion
 if [ "$kernelversion" == "y" ]; then
         echo -e "${bldcya}What version has your kernel? ${txtrst}"
         echo "${bldred}NUMBERS ONLY! ${txtrst}"
-        read version
+        read number
  
-        echo $version >> .version
+        echo $number >> .version
 fi
 ###########################################################################
 
