@@ -32,9 +32,6 @@
 static unsigned int enabled = 1;
 module_param(enabled, uint, S_IWUSR | S_IRUGO);
 
-static unsigned int enabled = 1;
-module_param(enabled, uint, S_IWUSR | S_IRUGO);
-
 /*
  * struct logger_log - represents a specific log, such as 'main' or 'radio'
  *
