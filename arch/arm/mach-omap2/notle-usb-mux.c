@@ -53,10 +53,10 @@ enum usb_mux_mode {
 };
 
 enum headset_jack_connection {
-	HS_JACK_UNKNOWN = 0,
-	HS_JACK_NONE,
-	HS_JACK_MONO,
-	HS_JACK_STEREO,
+	HS_JACK_UNKNOWN = -1,
+	HS_JACK_NONE = 0,
+	HS_JACK_MONO = 1,
+	HS_JACK_STEREO = 2,
 };
 
 struct usb_mux_device_info {
@@ -228,7 +228,7 @@ static void notle_hs_jack_report(struct usb_mux_device_info *di)
 
 	/* the following only do work if state has changed */
 	snd_soc_jack_report(di->jack, state, di->report);
-	switch_set_state(&di->sdev, !!state);
+	switch_set_state(&di->sdev, di->connected);
 }
 
 /* called at audio init time */
