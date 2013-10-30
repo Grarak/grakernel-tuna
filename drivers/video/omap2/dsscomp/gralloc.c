@@ -1,7 +1,6 @@
 #include <linux/kernel.h>
 #include <linux/slab.h>
 #include <linux/sched.h>
-#include <linux/vmalloc.h>
 #include <mach/tiler.h>
 #include <video/dsscomp.h>
 #include <plat/dsscomp.h>
@@ -578,8 +577,8 @@ void dsscomp_gralloc_init(struct dsscomp_dev *cdev_)
 			slots[i].slot = slot;
 			slots[i].phys = phys;
 			slots[i].size = TILER1D_SLOT_SIZE >> PAGE_SHIFT;
-			slots[i].page_map = vmalloc(sizeof(*slots[i].page_map) *
-						slots[i].size);
+			slots[i].page_map = kmalloc(sizeof(*slots[i].page_map) *
+						slots[i].size, GFP_KERNEL);
 			if (!slots[i].page_map) {
 				pr_err("could not allocate page_map");
 				tiler_free_block_area(slot);
@@ -602,9 +601,7 @@ void dsscomp_gralloc_exit(void)
 	unregister_early_suspend(&early_suspend_info);
 #endif
 
-	list_for_each_entry(slot, &free_slots, q) {
-		vfree(slot->page_map);
+	list_for_each_entry(slot, &free_slots, q)
 		tiler_free_block_area(slot->slot);
-	}
 	INIT_LIST_HEAD(&free_slots);
 }
