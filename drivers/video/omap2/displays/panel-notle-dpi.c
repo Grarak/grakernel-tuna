@@ -1194,6 +1194,7 @@ static int ice40_load(const u32 size, const u8 *bits, struct notle_drv_data *not
     printk(KERN_ERR LOG_TAG "ice40_load: No iCE40 bus data set in ice40_load()\n");
     return -1;
   }
+  printk(KERN_INFO LOG_TAG "ice40_load: CDONE before deconfig %d\n", gpio_get_value(panel_data->gpio_fpga_cdone));
   /* set CS polarity *active* high so it is low when creset goes high */
   bus_data.ice40_device->mode |= SPI_CS_HIGH;
   spi_setup(bus_data.ice40_device);
