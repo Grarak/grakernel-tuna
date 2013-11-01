@@ -1039,6 +1039,28 @@ static struct regulator_init_data notle_vusb = {
 	.consumer_supplies      = notle_vusb_supply,
 };
 
+static struct regulator_consumer_supply notle_v2v1_supply[] = {
+	REGULATOR_SUPPLY("v2v1", "1-004b"),
+};
+
+static struct regulator_init_data notle_v2v1_data = {
+	.constraints = {
+		.min_uV			= 2100000,
+		.max_uV			= 2100000,
+		.valid_modes_mask	= REGULATOR_MODE_NORMAL
+					| REGULATOR_MODE_STANDBY,
+		.valid_ops_mask		= REGULATOR_CHANGE_MODE
+					| REGULATOR_CHANGE_STATUS,
+		.always_on		= true,
+		.state_mem = {
+			.enabled	= true,
+		},
+		.initial_state		= PM_SUSPEND_MEM,
+	},
+	.num_consumer_supplies	= ARRAY_SIZE(notle_v2v1_supply),
+	.consumer_supplies	= notle_v2v1_supply,
+};
+
 static struct regulator_consumer_supply notle_clk32kg_supply[] = {
 	REGULATOR_SUPPLY("clk32kg", NULL),
 };
@@ -1384,6 +1406,7 @@ static struct twl4030_platform_data notle_twldata = {
 	.vaux3		= &notle_vaux3,
 	.clk32kg	= &omap4_notle_clk32kg,
 	.usb		= &omap4_usbphy_data,
+	.v2v1		= &notle_v2v1_data,
 
 	/* children */
 	.charger        = &notle_charger_data,
@@ -1895,8 +1918,7 @@ static int __init notle_i2c_init(void)
 	}
 
 	omap4_pmic_get_config(&notle_twldata, 0,
-		TWL_COMMON_REGULATOR_V1V8 |
-		TWL_COMMON_REGULATOR_V2V1);
+               TWL_COMMON_REGULATOR_V1V8);
 
 	omap4_pmic_init("twl6030", &notle_twldata, &twl6040_data, OMAP44XX_IRQ_SYS_2N);
 	notle_i2c_irq_fixup();
