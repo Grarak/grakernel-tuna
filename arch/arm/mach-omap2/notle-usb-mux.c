@@ -156,6 +156,12 @@ static void sync_usb_mux_mode(struct usb_mux_device_info *di)
 
 	dev_warn(di->dev, "Setting MUX mode to %s\n", str_for_mode(mode));
 
+	/* always go to float state first */
+	if (mode != di->cur_mode) {
+		gpio_set_value(di->gpio_cb0, 0);
+		gpio_set_value(di->gpio_cb1, 0);
+	}
+
 	switch (mode) {
 		case USB_MUX_MODE_FLOATING:
 			gpio_set_value(di->gpio_cb1, 0);
