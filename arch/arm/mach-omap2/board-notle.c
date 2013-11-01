@@ -1270,9 +1270,9 @@ static struct platform_device gpio_keys = {
 
 /* These gpios get set dynamically when we determine the platform */
 static struct gps_elton_platform_data_s gps_elton_platform_data  = {
-	.gpio_reset = -1,
-	.gpio_on_off = -1,
-	.gpio_awake = -1,
+	.gpio_reset = 0,
+	.gpio_on_off = 0,
+	.gpio_awake = 0,
 };
 
 static struct platform_device gps_elton_platform_device = {
@@ -2040,75 +2040,42 @@ static int omap_usb_mux_init(void)
 
 static int notle_gps_init(void) {
 	int r;
-	int gpio_gps_reset, gpio_gps_on_off;
 
-	/* Tell the driver the gpio pins to access the GPS chip */
-	gps_elton_platform_data.gpio_reset = notle_get_gpio(GPIO_GPS_RESET_N_INDEX);
-	gps_elton_platform_data.gpio_on_off = notle_get_gpio(GPIO_GPS_ON_OFF_INDEX);
-	/* An uninialized index returns -1 indicating non existant gpio */
-	gps_elton_platform_data.gpio_awake = notle_get_gpio(GPIO_GPS_AWAKE_INDEX);
+	gps_elton_platform_data.gpio_on_off =
+		notle_get_gpio(GPIO_GPS_ON_OFF_INDEX);
 
-	/* Configuration of requested GPIO lines */
-	gpio_gps_reset = notle_get_gpio(GPIO_GPS_RESET_N_INDEX);
-	gpio_gps_on_off = notle_get_gpio(GPIO_GPS_ON_OFF_INDEX);
-
-        r = gpio_request_one(gpio_gps_reset, GPIOF_OUT_INIT_HIGH,
-                "gps_reset_n");
-        if (r) {
-                pr_err("Failed to get gps_reset_n gpio\n");
-                goto error;
-        }
-
-        r = gpio_export(gpio_gps_reset, false);
-        if (r) {
-                pr_err("Unable to export gps_reset_n gpio\n");
-        }
-
-        r = gpio_sysfs_set_active_low(gpio_gps_reset, 0);
-        if (r) {
-                pr_err("Unable to set sysfs gps_reset_n active low\n");
-        }
-
-        /* Need a rising edge to turn device on. */
-        r = gpio_request_one(gpio_gps_on_off, GPIOF_OUT_INIT_LOW,
-                "gps_on_off");
+        r = gpio_request_one(gps_elton_platform_data.gpio_on_off,
+		GPIOF_OUT_INIT_LOW, "gps_on_off");
         if (r) {
                 pr_err("Failed to get gps_on_off gpio\n");
                 goto error;
         }
 
-        r = gpio_export(gpio_gps_on_off, false);
-        if (r) {
-                pr_err("Unable to export gps_on_off gpio\n");
-        }
+	gps_elton_platform_data.gpio_reset =
+		notle_get_gpio(GPIO_GPS_RESET_N_INDEX);
 
-        /* EVT2 added the GPS_AWAKE connection, was NC in EVT1 */
-        if ( notle_version_after(V1_EVT1) ) {
-            r = gpio_request_one(GPIO_GPS_AWAKE_EVT2, GPIOF_IN, "gps_awake");
-            if (r) {
-                    pr_err("Failed to get gps_awake gpio\n");
-                    goto error;
-            }
+	r = gpio_request_one(gps_elton_platform_data.gpio_reset,
+		GPIOF_OUT_INIT_HIGH, "gps_reset_n");
+	if (r) {
+		pr_err("Failed to get gps_reset_n gpio\n");
+		goto error;
+	}
 
-            r = gpio_export(GPIO_GPS_AWAKE_EVT2, false);
-            if (r) {
-                    pr_err("Unable to export gps_awake gpio\n");
-            }
-        }
-        return 0;
+	gps_elton_platform_data.gpio_awake =
+		notle_get_gpio(GPIO_GPS_AWAKE_INDEX);
+
+
+	r = gpio_request_one(GPIO_GPS_AWAKE_EVT2, GPIOF_IN, "gps_awake");
+	if (r) {
+		pr_err("Failed to get gps_awake gpio\n");
+		goto error;
+	}
+
+	return 0;
 
 error:
         return r;
 }
-
-/* XXX Turning on GPS currently costs us ~50mA of current draw.
-static int __init notle_gps_start(void) {
-	gpio_set_value(GPIO_GPS_ON_OFF, 1);
-        pr_info("Turning on GPS chip\n");
-        return 0;
-}
-late_initcall(notle_gps_start);
-*/
 
 static int __init notle_touchpad_init(void) {
         int r;
