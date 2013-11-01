@@ -1215,6 +1215,17 @@ static struct omap_uart_port_info omap_serial_port_info[] __initdata = {
         },
 };
 
+int notle_camera_sensor_gpio() {
+	return notle_get_gpio(GPIO_CAM_PWDN_INDEX);
+}
+
+void __init notle_camera_sensor_gpio_init(void)
+{
+	// Take over the GPIO pin such that its properly powering down the Camera Sensor when:
+	// Ducati:OFF and Offmode: false
+	gpio_request_one(notle_camera_sensor_gpio(), GPIOF_OUT_INIT_LOW, "CAMERA_PWDN");
+}
+
 void __init notle_serial_init(void)
 {
 	omap_serial_init_port(&uart2_board_data, &omap_serial_port_info[1]);
@@ -2303,6 +2314,7 @@ static void __init notle_init(void)
                 pr_err("Wifi initialization failed: %d\n", err);
         }
 
+        notle_camera_sensor_gpio_init();
         notle_serial_init();
         omap4_twl6030_hsmmc_init(mmc);
         usb_musb_init(&musb_board_data);

@@ -25,6 +25,10 @@
 #include <linux/remoteproc.h>
 #include "rpmsg_resmgr_common.h"
 
+#ifdef CONFIG_MACH_NOTLE
+extern int notle_camera_sensor_gpio();
+#endif
+
 struct rprm_i2c_depot {
 	u32 id;
 	struct device *dev;
@@ -42,7 +46,12 @@ static int rprm_gpio_request(void **handle, void *args, size_t len)
 
 	if (sizeof *gpio != len)
 		return -EINVAL;
-
+#ifdef CONFIG_MACH_NOTLE
+	if (notle_camera_sensor_gpio() == gpio->id) {
+		// Board already took care of handling that gpio.
+		return 0;
+	}
+#endif
 	ret = gpio_request(gpio->id , "rpmsg_resmgr");
 	if (ret) {
 		pr_err("error providing gpio %d\n", gpio->id);
@@ -58,6 +67,10 @@ static int rprm_gpio_release(void *handle)
 {
 	u32 id = (unsigned)handle;
 
+#ifdef CONFIG_MACH_NOTLE
+	if (notle_camera_sensor_gpio() == id)
+		return 0;
+#endif
 	gpio_free(id);
 
 	return 0;
