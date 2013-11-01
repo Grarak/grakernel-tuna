@@ -385,7 +385,7 @@ static void usb_id_work(struct work_struct *id_work)
 
 	notle_hs_jack_report(di);
 	if (di->monitor_id) {
-		schedule_delayed_work(&di->id_work, msecs_to_jiffies(RID_POLL_INTERVAL));
+		queue_delayed_work(di->wq, &di->id_work, msecs_to_jiffies(RID_POLL_INTERVAL));
 	}
 }
 
@@ -446,7 +446,7 @@ static ssize_t set_id_monitor(struct device *dev, struct device_attribute *attr,
 	if (di->monitor_id != value) {
 		di->monitor_id = value;
 		if (value) {
-			schedule_delayed_work(&di->id_work, msecs_to_jiffies(RID_POLL_INTERVAL));
+			queue_delayed_work(di->wq, &di->id_work, msecs_to_jiffies(RID_POLL_INTERVAL));
 		}
 	}
 	return count;
