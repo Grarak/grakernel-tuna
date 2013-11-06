@@ -1938,6 +1938,12 @@ static int __init notle_i2c_init(void)
 			ARRAY_SIZE(notle_i2c_3_boardinfo));
 	omap_register_i2c_bus(4, 384, notle_i2c_4_boardinfo,
 			ARRAY_SIZE(notle_i2c_4_boardinfo));
+
+	/*
+	 * This will allow unused regulator to be shutdown. This flag
+	 * should be set in the board file. Before regulators are registered.
+	 */
+	regulator_has_full_constraints();
 	return 0;
 }
 
