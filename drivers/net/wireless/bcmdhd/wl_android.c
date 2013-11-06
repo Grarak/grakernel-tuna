@@ -384,6 +384,9 @@ int wl_android_wifi_on(struct net_device *dev)
 #ifdef PROP_TXSTATUS
 		dhd_wlfc_init(bcmsdh_get_drvdata());
 #endif
+#ifdef CONFIG_MACH_NOTLE
+		net_os_set_dtim_skip(dev,3);
+#endif
 		g_wifi_on = TRUE;
 	}
 
