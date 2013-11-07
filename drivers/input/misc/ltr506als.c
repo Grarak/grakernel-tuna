@@ -112,6 +112,7 @@ struct ltr506_data *sensor_info;
 
 static int als_enable(struct ltr506_data *ltr506);
 static int als_disable(struct ltr506_data *ltr506);
+static int _hack_check_valid_als_zero(struct ltr506_data *ltr506);
 
 /* I2C Read */
 static int I2C_Read(char *rxData,
@@ -246,7 +247,7 @@ static int _ltr506_set_field(struct i2c_client *client, uint8_t mask, uint8_t cm
 	return ret;
 }
 
-/* Read ALS ADC Channel 1 Value */
+/* Read ALS ADC Channel 1 Value - clear diode */
 static uint32_t read_als_adc_ch1_value(struct ltr506_data *ltr506)
 {
 	int ret;
@@ -267,7 +268,7 @@ static uint32_t read_als_adc_ch1_value(struct ltr506_data *ltr506)
 	return value;
 }
 
-/* Read ALS ADC Channel 2 Value */
+/* Read ALS ADC Channel 2 Value - IR diode */
 static uint32_t read_als_adc_ch2_value(struct ltr506_data *ltr506)
 {
 	int ret;
@@ -288,8 +289,8 @@ static uint32_t read_als_adc_ch2_value(struct ltr506_data *ltr506)
 	return value;
 }
 
-/* Read ADC ALS Value */
-static int read_adc_value_als(struct ltr506_data *ltr506)
+/* Read ADC ALS filtered value */
+static int read_adc_value_als_filtered(struct ltr506_data *ltr506)
 {
 	int ret;
 	int val;
@@ -304,12 +305,26 @@ static int read_adc_value_als(struct ltr506_data *ltr506)
 	}
 
 	val = buf[0] | (buf[1] << 8);
-	dev_dbg(&ltr506->i2c_client->dev, "%s value = 0x%d\n", __func__, val);
 
 	if (val > LTR506_ALS_MAX_MEASURE_VAL) {
 		dev_err(&ltr506->i2c_client->dev, "%s: ALS overflow:%d\n",
 		        __func__, val);
 	}
+	return (val & LTR506_ALS_VALID_MEASURE_MASK);
+}
+
+/* Read ADC ALS Value */
+static int read_adc_value_als(struct ltr506_data *ltr506)
+{
+	int val = read_adc_value_als_filtered(ltr506);
+
+	/* If we received a zero value, we need to double check the
+	   raw diode values to see if it's a true zero, or if
+	   over zealous filtering occurred. */
+	if (val == 0) {
+		val = _hack_check_valid_als_zero(ltr506);
+	}
+
 	return (val & LTR506_ALS_VALID_MEASURE_MASK);
 }
 
@@ -444,36 +459,59 @@ static void report_ps_input_event(struct ltr506_data *ltr506)
 /* Read raw sensor value which bypasses the LUX filter.
    The LUX filter has logic to remove 60Hz frequencies which
    was proven to be broken for incandescent lights in previous
-   versions of this sensor. */
-static int _report_als_hack(struct ltr506_data *ltr506) {
-	static int cnt = 0;
+   versions of this sensor.
+   This should only be called if the als filtered value reports
+   a zero.  However, a re-read occurs, and if that is non-zero then
+   we return that value back. */
+static int _hack_check_valid_als_zero(struct ltr506_data *ltr506) {
 	int adc_val;
-	int adc_val_raw_ch1;
-	int adc_val_raw_ch2;
-	/* Read the RAW values.  We are stuffing a 20 bit value into
-	   a 16 bit register so drop 4 LSBs */
-	adc_val_raw_ch1 = (read_als_adc_ch1_value(ltr506) >> 4);
-	adc_val_raw_ch2 = (read_als_adc_ch2_value(ltr506) >> 4);
+	uint32_t adc_val_raw_ch1;
+	uint32_t adc_val_raw_ch2;
+
+	/* Read the RAW diode sensor values  */
+	adc_val_raw_ch1 = read_als_adc_ch1_value(ltr506);
+	adc_val_raw_ch2 = read_als_adc_ch2_value(ltr506);
 
 	/* Now re-read the filtered value for good measure */
-	adc_val = read_adc_value_als(ltr506);
+	adc_val = read_adc_value_als_filtered(ltr506);
 
-	/* Check if false darkness value */
-	if (adc_val_raw_ch1 != 0 || adc_val_raw_ch2 != 0) {
-		dev_warn(&ltr506->i2c_client->dev, "%s Not dark adc_val:%d"
-		         " adc_val_raw_ch1:%d adc_val_raw_ch2:%d\n",
-		         __func__, adc_val, adc_val_raw_ch1,
-		         adc_val_raw_ch2);
+	/* Return any non-zero values as that is not the signature of
+	   the 50/60Hz filter bug. */
+	if (adc_val != 0) {
+		return adc_val;
 	}
 
-	/* We don't want to spam log so only log the first few.
-	   TODO(cmanton) Remove this logging when behavior understood */
-	if (++cnt < 10) {
-		dev_info(&ltr506->i2c_client->dev, "%s cnt:%d adc_val:%d"
-		         " adc_val_raw_ch1:%d adc_val_raw_ch2:%d\n",
-		         __func__, cnt, adc_val, adc_val_raw_ch1,
+	/* Check if true or bogus darkness value.
+	   These checks could be done in a few ways, esp. with
+	   more data, but if one or the other raw value is zero,
+	   there seems to be a high probability that the filtered
+	   value is a true zero too. */
+	if (adc_val_raw_ch1 == 0 || adc_val_raw_ch2 == 0) {
+		/* True darkness value, so let it ride */
+		if (adc_val != ltr506->als_last_value) {
+			/* Don't spam logs, or reduce this to debug logging
+			   when confident this WA actually works-around */
+			dev_info(&ltr506->i2c_client->dev, "%s True dark"
+			         " adc_val:%d adc_val_raw_ch1:%d"
+			         " adc_val_raw_ch2:%d\n", __func__, adc_val,
+			         adc_val_raw_ch1, adc_val_raw_ch2);
+		}
+	} else {
+		/* This is the crux of this hacky work around.
+		   We believe we received a bogus darkness value.  Present last
+		   value instead under the assumption it's closer to the
+		   true value then a bogus zero. */
+		dev_info(&ltr506->i2c_client->dev, "%s Not dark presenting last"
+		         " value adc_val:%d last_val:%d adc_val_raw_ch1:%d"
+		         " adc_val_raw_ch2:%d\n", __func__, adc_val,
+		         ltr506->als_last_value, adc_val_raw_ch1,
 		         adc_val_raw_ch2);
+		adc_val = ltr506->als_last_value;
 	}
+	dev_dbg(&ltr506->i2c_client->dev, "%s Darkness check adc_val:%d"
+	        " adc_val_raw_ch1:%d adc_val_raw_ch2:%d\n",
+	        __func__, adc_val, adc_val_raw_ch1,
+	        adc_val_raw_ch2);
 	return adc_val;
 }
 
@@ -486,10 +524,9 @@ static void report_als_input_event(struct ltr506_data *ltr506)
 
 	adc_value = read_adc_value_als(ltr506);
 
-	/* Special case adc value to see if it's a true zero (darkness) or
-	   if we are using a workaround to bypass the LUX filter. */
-	if (adc_value == 0 || ltr506->ps_must_be_on_while_als_on == 1) {
-		adc_value = _report_als_hack(ltr506);
+	/* Check if we are using a workaround to bypass the LUX filter. */
+	if (ltr506->ps_must_be_on_while_als_on == 1) {
+		adc_value = read_als_adc_ch1_value(ltr506);
 	}
 
 	if (ltr506->als_from_suspend && (ltr506->als_last_value == adc_value)) {
@@ -1075,6 +1112,34 @@ static ssize_t als_adc_show(struct device *dev,
 
 static DEVICE_ATTR(als_adc, 0666, als_adc_show, NULL);
 
+static ssize_t als_adc_ch1_show(struct device *dev,
+                                struct device_attribute *attr, char *buf)
+{
+	int value;
+	int ret;
+	struct ltr506_data *ltr506 = sensor_info;
+
+	value = read_als_adc_ch1_value(ltr506);
+	ret = sprintf(buf, "%d\n", value);
+
+	return ret;
+}
+static DEVICE_ATTR(als_adc_ch1, 0666, als_adc_ch1_show, NULL);
+
+static ssize_t als_adc_ch2_show(struct device *dev,
+                                struct device_attribute *attr, char *buf)
+{
+	int value;
+	int ret;
+	struct ltr506_data *ltr506 = sensor_info;
+
+	value = read_als_adc_ch2_value(ltr506);
+	ret = sprintf(buf, "%d\n", value);
+
+	return ret;
+}
+static DEVICE_ATTR(als_adc_ch2, 0666, als_adc_ch2_show, NULL);
+
 static ssize_t als_enable_show(struct device *dev,
                                struct device_attribute *attr, char *buf)
 {
@@ -1657,6 +1722,8 @@ static void sysfs_register_device(struct i2c_client *client) {
 static void sysfs_register_als_device(struct i2c_client *client, struct device *dev) {
 	int rc = 0;
 	rc += device_create_file(dev, &dev_attr_als_adc);
+	rc += device_create_file(dev, &dev_attr_als_adc_ch1);
+	rc += device_create_file(dev, &dev_attr_als_adc_ch2);
 	rc += device_create_file(dev, &dev_attr_als_resolution);
 	rc += device_create_file(dev, &dev_attr_als_enable);
 	rc += device_create_file(dev, &dev_attr_als_gain);
