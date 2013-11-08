@@ -78,6 +78,6 @@ config DHD_USE_STATIC_BUF
 config DHD_USE_SCHED_SCAN
 	bool "Use CFG80211 sched scan"
 	depends on BCMDHD && CFG80211
-	default n
+	default y
 	---help---
 	  Use CFG80211 sched scan
