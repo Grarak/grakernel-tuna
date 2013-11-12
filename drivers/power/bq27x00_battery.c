@@ -173,7 +173,7 @@ static u8 bq27x00_fw_l1_regs[] = {
 /* TI L1 firmware (v6.04) extra registers */
 	0x76, /* BQ27x00_REG_MAX_CURRENT */
 	0x24, /* BQ27x00_REG_QPASSED_HIRES_INT */
-	0x27, /* BQ27x00_REG_QPASSED_HIRES_FRACTION */
+	0x26, /* BQ27x00_REG_QPASSED_HIRES_FRACTION */
 
 };
 
