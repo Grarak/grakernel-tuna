@@ -147,7 +147,7 @@ static void wakeupgen_mask(struct irq_data *d)
 	unsigned long flags;
 
 	spin_lock_irqsave(&wakeupgen_lock, flags);
-	_wakeupgen_clear(d->irq, irq_target_cpu[d->irq]);
+	_wakeupgen_clear(d->hwirq, irq_target_cpu[d->hwirq]);
 	spin_unlock_irqrestore(&wakeupgen_lock, flags);
 }
 
@@ -159,7 +159,7 @@ static void wakeupgen_unmask(struct irq_data *d)
 	unsigned long flags;
 
 	spin_lock_irqsave(&wakeupgen_lock, flags);
-	_wakeupgen_set(d->irq, irq_target_cpu[d->irq]);
+	_wakeupgen_set(d->hwirq, irq_target_cpu[d->hwirq]);
 	spin_unlock_irqrestore(&wakeupgen_lock, flags);
 }
 
