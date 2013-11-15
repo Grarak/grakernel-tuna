@@ -1648,6 +1648,7 @@ static int soc_dpcm_fe_dai_prepare(struct snd_pcm_substream *substream)
 
 	fe->dpcm[stream].runtime_update = SND_SOC_DPCM_UPDATE_FE;
 
+#ifndef CONFIG_MACH_NOTLE
 	/* there is no point preparing this FE if there are no BEs */
 	if (list_empty(&fe->dpcm[stream].be_clients)) {
 		dev_err(fe->dev, "dpcm: no backend DAIs enabled for %s\n",
@@ -1655,6 +1656,7 @@ static int soc_dpcm_fe_dai_prepare(struct snd_pcm_substream *substream)
 		ret = -EINVAL;
 		goto out;
 	}
+#endif
 
 	ret = soc_dpcm_be_dai_prepare(fe, substream->stream);
 	if (ret < 0)
@@ -1945,12 +1947,14 @@ int soc_dpcm_runtime_update(struct snd_soc_dapm_widget *widget)
 			goto capture;
 
 		paths = fe_path_get(fe, SNDRV_PCM_STREAM_PLAYBACK, &list);
+#ifndef CONFIG_MACH_NOTLE
 		if (paths < 0) {
 			dev_warn(fe->dev, "%s no valid %s route from source to sink\n",
 					fe->dai_link->name,  "playback");
 			mutex_unlock(&card->mutex);
 			return paths;
 		}
+#endif
 
 		/* update any new playback paths */
 		new = dpcm_process_paths(fe, SNDRV_PCM_STREAM_PLAYBACK, &list, 1);
@@ -1976,12 +1980,14 @@ capture:
 			continue;
 
 		paths = fe_path_get(fe, SNDRV_PCM_STREAM_CAPTURE, &list);
+#ifndef CONFIG_MACH_NOTLE
 		if (paths < 0) {
 			dev_warn(fe->dev, "%s no valid %s route from source to sink\n",
 					fe->dai_link->name,  "capture");
 			mutex_unlock(&card->mutex);
 			return paths;
 		}
+#endif
 
 		/* update any new capture paths */
 		new = dpcm_process_paths(fe, SNDRV_PCM_STREAM_CAPTURE, &list, 1);
@@ -2355,8 +2361,10 @@ static int soc_dpcm_fe_dai_open(struct snd_pcm_substream *fe_substream)
 	if (fe_path_get(fe, stream, &list) <= 0) {
 		dev_warn(fe->dev, "asoc: %s no valid %s route from source to sink\n",
 			fe->dai_link->name, stream ? "capture" : "playback");
+#ifndef CONFIG_MACH_NOTLE
 			mutex_unlock(&fe->card->mutex);
 			return -EINVAL;
+#endif
 	}
 
 	/* calculate valid and active FE <-> BE dpcm_paramss */

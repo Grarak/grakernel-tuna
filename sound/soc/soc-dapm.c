@@ -844,8 +844,10 @@ static int is_connected_input_ep(struct snd_soc_dapm_widget *widget,
 	struct snd_soc_dapm_path *path;
 	int con = 0;
 
+#ifndef CONFIG_MACH_NOTLE
 	if (widget->inputs >= 0)
 		return widget->inputs;
+#endif
 
 	DAPM_UPDATE_STAT(widget, path_checks);
 

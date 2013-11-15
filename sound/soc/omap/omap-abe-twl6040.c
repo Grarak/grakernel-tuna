@@ -202,7 +202,7 @@ static int omap_abe_mcbsp_hw_params(struct snd_pcm_substream *substream,
 
 	/* Set cpu DAI configuration */
 	ret = snd_soc_dai_set_fmt(cpu_dai, SND_SOC_DAIFMT_I2S |
-			SND_SOC_DAIFMT_NB_NF | SND_SOC_DAIFMT_CBM_CFM);
+			SND_SOC_DAIFMT_NB_IF | SND_SOC_DAIFMT_CBM_CFM);
 
 	if (ret < 0) {
 		dev_err(card->dev, "can't set cpu DAI configuration\n");
@@ -879,6 +879,22 @@ static struct snd_soc_dai_link omap_abe_dai_link[] = {
 		.ops = &omap_abe_dmic_ops,
 		.ignore_suspend = 1,
 	},
+#ifdef CONFIG_MACH_NOTLE
+	{
+		.name = "Bluetooth McBSP",
+		.stream_name = "Bluetooth Audio",
+
+		.cpu_dai_name = "omap-mcbsp.1",
+		.platform_name = "omap-pcm-audio",
+		.codec_dai_name = "snd-soc-dummy-dai",
+		.codec_name = "snd-soc-dummy",
+		.be_hw_params_fixup = mcbsp_be_hw_params_fixup,
+		.ops = &omap_abe_mcbsp_ops,
+		.ignore_suspend = 1,
+		.be_id = OMAP_ABE_DAI_BT_VX,
+		.dynamic = 1,
+	},
+#endif
 
 /*
  * Backend DAIs - i.e. dynamically matched interfaces, invisible to userspace.
@@ -958,6 +974,7 @@ static struct snd_soc_dai_link omap_abe_dai_link[] = {
 		.ops = &omap_abe_mcpdm_ops,
 		.be_id = OMAP_ABE_DAI_PDM_VIB,
 	},
+#ifndef CONFIG_MACH_NOTLE
 	{
 		.name = OMAP_ABE_BE_BT_VX_UL,
 		.stream_name = "BT Capture",
@@ -995,6 +1012,7 @@ static struct snd_soc_dai_link omap_abe_dai_link[] = {
 		.be_id = OMAP_ABE_DAI_BT_VX,
 		.ignore_suspend = 1,
 	},
+#endif
 	{
 		.name = OMAP_ABE_BE_MM_EXT0_UL,
 		.stream_name = "FM Capture",

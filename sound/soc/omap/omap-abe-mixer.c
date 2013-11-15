@@ -985,8 +985,10 @@ static const struct snd_soc_dapm_route intercon[] = {
 	{"MUX_UL00", "DMic1R", "DMIC1"},
 	{"MUX_UL00", "DMic2L", "DMIC2"},
 	{"MUX_UL00", "DMic2R", "DMIC2"},
+#ifndef CONFIG_MACH_NOTLE
 	{"MUX_UL00", "BT Left", "BT_VX_UL"},
 	{"MUX_UL00", "BT Right", "BT_VX_UL"},
+#endif
 	{"MUX_UL00", "MMExt Left", "MM_EXT_UL"},
 	{"MUX_UL00", "MMExt Right", "MM_EXT_UL"},
 	{"MUX_UL00", "AMic0", "PDM_UL1"},
@@ -1004,8 +1006,10 @@ static const struct snd_soc_dapm_route intercon[] = {
 	{"MUX_UL01", "DMic1R", "DMIC1"},
 	{"MUX_UL01", "DMic2L", "DMIC2"},
 	{"MUX_UL01", "DMic2R", "DMIC2"},
+#ifndef CONFIG_MACH_NOTLE
 	{"MUX_UL01", "BT Left", "BT_VX_UL"},
 	{"MUX_UL01", "BT Right", "BT_VX_UL"},
+#endif
 	{"MUX_UL01", "MMExt Left", "MM_EXT_UL"},
 	{"MUX_UL01", "MMExt Right", "MM_EXT_UL"},
 	{"MUX_UL01", "AMic0", "PDM_UL1"},
@@ -1023,8 +1027,10 @@ static const struct snd_soc_dapm_route intercon[] = {
 	{"MUX_UL02", "DMic1R", "DMIC1"},
 	{"MUX_UL02", "DMic2L", "DMIC2"},
 	{"MUX_UL02", "DMic2R", "DMIC2"},
+#ifndef CONFIG_MACH_NOTLE
 	{"MUX_UL02", "BT Left", "BT_VX_UL"},
 	{"MUX_UL02", "BT Right", "BT_VX_UL"},
+#endif
 	{"MUX_UL02", "MMExt Left", "MM_EXT_UL"},
 	{"MUX_UL02", "MMExt Right", "MM_EXT_UL"},
 	{"MUX_UL02", "AMic0", "PDM_UL1"},
@@ -1042,8 +1048,10 @@ static const struct snd_soc_dapm_route intercon[] = {
 	{"MUX_UL03", "DMic1R", "DMIC1"},
 	{"MUX_UL03", "DMic2L", "DMIC2"},
 	{"MUX_UL03", "DMic2R", "DMIC2"},
+#ifndef CONFIG_MACH_NOTLE
 	{"MUX_UL03", "BT Left", "BT_VX_UL"},
 	{"MUX_UL03", "BT Right", "BT_VX_UL"},
+#endif
 	{"MUX_UL03", "MMExt Left", "MM_EXT_UL"},
 	{"MUX_UL03", "MMExt Right", "MM_EXT_UL"},
 	{"MUX_UL03", "AMic0", "PDM_UL1"},
@@ -1061,8 +1069,10 @@ static const struct snd_soc_dapm_route intercon[] = {
 	{"MUX_UL04", "DMic1R", "DMIC1"},
 	{"MUX_UL04", "DMic2L", "DMIC2"},
 	{"MUX_UL04", "DMic2R", "DMIC2"},
+#ifndef CONFIG_MACH_NOTLE
 	{"MUX_UL04", "BT Left", "BT_VX_UL"},
 	{"MUX_UL04", "BT Right", "BT_VX_UL"},
+#endif
 	{"MUX_UL04", "MMExt Left", "MM_EXT_UL"},
 	{"MUX_UL04", "MMExt Right", "MM_EXT_UL"},
 	{"MUX_UL04", "AMic0", "PDM_UL1"},
@@ -1080,8 +1090,10 @@ static const struct snd_soc_dapm_route intercon[] = {
 	{"MUX_UL05", "DMic1R", "DMIC1"},
 	{"MUX_UL05", "DMic2L", "DMIC2"},
 	{"MUX_UL05", "DMic2R", "DMIC2"},
+#ifndef CONFIG_MACH_NOTLE
 	{"MUX_UL05", "BT Left", "BT_VX_UL"},
 	{"MUX_UL05", "BT Right", "BT_VX_UL"},
+#endif
 	{"MUX_UL05", "MMExt Left", "MM_EXT_UL"},
 	{"MUX_UL05", "MMExt Right", "MM_EXT_UL"},
 	{"MUX_UL05", "AMic0", "PDM_UL1"},
@@ -1099,8 +1111,10 @@ static const struct snd_soc_dapm_route intercon[] = {
 	{"MUX_UL10", "DMic1R", "DMIC1"},
 	{"MUX_UL10", "DMic2L", "DMIC2"},
 	{"MUX_UL10", "DMic2R", "DMIC2"},
+#ifndef CONFIG_MACH_NOTLE
 	{"MUX_UL10", "BT Left", "BT_VX_UL"},
 	{"MUX_UL10", "BT Right", "BT_VX_UL"},
+#endif
 	{"MUX_UL10", "MMExt Left", "MM_EXT_UL"},
 	{"MUX_UL10", "MMExt Right", "MM_EXT_UL"},
 	{"MUX_UL10", "AMic0", "PDM_UL1"},
@@ -1118,8 +1132,10 @@ static const struct snd_soc_dapm_route intercon[] = {
 	{"MUX_UL11", "DMic1R", "DMIC1"},
 	{"MUX_UL11", "DMic2L", "DMIC2"},
 	{"MUX_UL11", "DMic2R", "DMIC2"},
+#ifndef CONFIG_MACH_NOTLE
 	{"MUX_UL11", "BT Left", "BT_VX_UL"},
 	{"MUX_UL11", "BT Right", "BT_VX_UL"},
+#endif
 	{"MUX_UL11", "MMExt Left", "MM_EXT_UL"},
 	{"MUX_UL11", "MMExt Right", "MM_EXT_UL"},
 	{"MUX_UL11", "AMic0", "PDM_UL1"},
@@ -1137,8 +1153,10 @@ static const struct snd_soc_dapm_route intercon[] = {
 	{"MUX_VX0", "DMic1R", "DMIC1"},
 	{"MUX_VX0", "DMic2L", "DMIC2"},
 	{"MUX_VX0", "DMic2R", "DMIC2"},
+#ifndef CONFIG_MACH_NOTLE
 	{"MUX_VX0", "BT Left", "BT_VX_UL"},
 	{"MUX_VX0", "BT Right", "BT_VX_UL"},
+#endif
 	{"MUX_VX0", "MMExt Left", "MM_EXT_UL"},
 	{"MUX_VX0", "MMExt Right", "MM_EXT_UL"},
 	{"MUX_VX0", "AMic0", "PDM_UL1"},
@@ -1155,8 +1173,10 @@ static const struct snd_soc_dapm_route intercon[] = {
 	{"MUX_VX1", "DMic1R", "DMIC1"},
 	{"MUX_VX1", "DMic2L", "DMIC2"},
 	{"MUX_VX1", "DMic2R", "DMIC2"},
+#ifndef CONFIG_MACH_NOTLE
 	{"MUX_VX1", "BT Left", "BT_VX_UL"},
 	{"MUX_VX1", "BT Right", "BT_VX_UL"},
+#endif
 	{"MUX_VX1", "MMExt Left", "MM_EXT_UL"},
 	{"MUX_VX1", "MMExt Right", "MM_EXT_UL"},
 	{"MUX_VX1", "AMic0", "PDM_UL1"},
@@ -1185,7 +1205,9 @@ static const struct snd_soc_dapm_route intercon[] = {
 	{"DL1 MM_EXT", "Switch", "Sidetone Mixer"},
 	{"DL1 PDM", "Switch", "Sidetone Mixer"},
 	{"PDM_DL1", NULL, "DL1 PDM"},
+#ifndef CONFIG_MACH_NOTLE
 	{"BT_VX_DL", NULL, "DL1 BT_VX"},
+#endif
 	{"MM_EXT_DL", NULL, "DL1 MM_EXT"},
 
 	/* Handsfree (DL2) playback path */
@@ -1250,9 +1272,13 @@ static const struct snd_soc_dapm_route intercon[] = {
 	{"BE_OUT", NULL, "PDM_DL2"},
 	{"BE_OUT", NULL, "PDM_VIB"},
 	{"BE_OUT", NULL, "MM_EXT_DL"},
+#ifndef CONFIG_MACH_NOTLE
 	{"BE_OUT", NULL, "BT_VX_DL"},
+#endif
 	{"PDM_UL1", NULL, "BE_IN"},
+#ifndef CONFIG_MACH_NOTLE
 	{"BT_VX_UL", NULL, "BE_IN"},
+#endif
 	{"MM_EXT_UL", NULL, "BE_IN"},
 	{"DMIC0", NULL, "BE_IN"},
 	{"DMIC1", NULL, "BE_IN"},
