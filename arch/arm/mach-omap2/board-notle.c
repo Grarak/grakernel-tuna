@@ -230,17 +230,6 @@ int notle_version_support_battery_temperature(void) {
 
 static struct pcb_section omap4_duty_governor_pcb_sections[] = {
 	{
-		.pcb_temp_level			= 25000,
-		.max_opp			= 1008000,
-		.duty_cycle_enabled		= false,
-		.tduty_params = {
-			.nitro_rate		= 1008000,
-			.cooling_rate		= 800000,
-			.nitro_interval		= 20000,
-			.nitro_percentage	= 80,
-		},
-	},
-	{
 		.pcb_temp_level			= 30000,
 		.max_opp			= 1008000,
 		.duty_cycle_enabled		= true,
@@ -2263,13 +2252,13 @@ static void __init notle_init(void)
             if (notle_version_after(V1_EVT2) && (mem_size_mb==2048))
             {
                 omap_emif_set_device_details(1, &lpddr2_elpida_4G_S4_x2_info, lpddr2_elpida_4G_S4_timings, ARRAY_SIZE(lpddr2_elpida_4G_S4_timings),
-                                             &lpddr2_elpida_S4_min_tck,  &custom_configs);
+                                             &lpddr2_elpida_S4_min_tck, NULL);
                 omap_emif_set_device_details(2, &lpddr2_elpida_4G_S4_x2_info, lpddr2_elpida_4G_S4_timings, ARRAY_SIZE(lpddr2_elpida_4G_S4_timings),
-                                             &lpddr2_elpida_S4_min_tck,  &custom_configs);
+                                             &lpddr2_elpida_S4_min_tck, NULL);
             }
             else {
                 omap_emif_set_device_details(1, &lpddr2_elpida_4G_S4_info, lpddr2_elpida_4G_S4_timings, ARRAY_SIZE(lpddr2_elpida_4G_S4_timings),
-                                             &lpddr2_elpida_S4_min_tck, &custom_configs);
+                                             &lpddr2_elpida_S4_min_tck, NULL);
             }
 
             omap4_mux_init(evt2_board_mux, evt2_board_wkup_mux, package);
