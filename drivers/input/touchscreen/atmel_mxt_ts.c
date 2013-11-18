@@ -21,9 +21,6 @@
 #include <linux/interrupt.h>
 #include <linux/slab.h>
 
-// Touch Boost Control
-//#include <linux/touch_boost_control.h> 
-
 /* Version */
 #define MXT_VER_20		20
 #define MXT_VER_21		21
