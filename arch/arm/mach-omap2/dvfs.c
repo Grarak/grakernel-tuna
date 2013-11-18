@@ -28,10 +28,6 @@
 #include "powerdomain.h"
 #include "pm.h"
 
-#ifdef CONFIG_CUSTOM_VOLTAGE
-#include <linux/custom_voltage.h>
-#endif
-
 /**
  * DOC: Introduction
  * =================
@@ -1314,10 +1310,5 @@ int __init omap_dvfs_register_device(struct device *dev, char *voltdm_name,
 	/* Fall through */
 out:
 	mutex_unlock(&omap_dvfs_lock);
-
-#ifdef CONFIG_CUSTOM_VOLTAGE
-	customvoltage_register_dvfsmutex(&omap_dvfs_lock);
-#endif
-
 	return ret;
 }
