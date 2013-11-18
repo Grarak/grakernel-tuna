@@ -201,7 +201,7 @@ struct omap_dss_device * lcd_dev;
 
 struct s6e8aa0_data * s6_data;
 
-int v1_offset[3] = {-2, 0, 3};
+int v1_offset[3] = {0, 0, 0};
 #endif
 
 static int s6e8aa0_write_reg(struct omap_dss_device *dssdev, u8 reg, u8 val)
@@ -783,7 +783,7 @@ static void s6e8aa0_setup_gamma_regs(struct s6e8aa0_data *s6, u8 gamma_regs[],
 			adj = clamp_t(int, adj, adj_min, adj_max);
 		}
 #ifdef CONFIG_COLOR_CONTROL
-		gamma_regs[gamma_reg_index(c, V1)] = ((adj + v1_offset[c]) > 0 && (adj <=255)) ? (adj + v1_offset[c]) : adj;
+                gamma_regs[gamma_reg_index(c, V1)] = ((adj + v1_offset[c]) > 0 && (adj <=255)) ? (adj + v1_offset[c]) : adj;
 #else
 		gamma_regs[gamma_reg_index(c, V1)] = adj;
 #endif
@@ -1148,10 +1148,10 @@ static void s6e8aa0_adjust_brightness_from_mtp(struct s6e8aa0_data *s6)
 void colorcontrol_update(bool multiplier_updated)
 {
     if (multiplier_updated)
-	s6e8aa0_adjust_brightness_from_mtp(s6_data);
+        s6e8aa0_adjust_brightness_from_mtp(s6_data);
 
     if (lcd_dev->state == OMAP_DSS_DISPLAY_ACTIVE)
-	s6e8aa0_update_brightness(lcd_dev);
+        s6e8aa0_update_brightness(lcd_dev);
 
     return;
 }
@@ -1668,11 +1668,11 @@ static int s6e8aa0_probe(struct omap_dss_device *dssdev)
 		s6->force_update = true;
 
 #ifdef CONFIG_COLOR_CONTROL
-	lcd_dev = dssdev;
-	s6_data = s6;
+        lcd_dev = dssdev;
+        s6_data = s6;
 
-	colorcontrol_register_offset(v1_offset);
-	colorcontrol_register_multiplier(s6->pdata->factory_info->color_adj.mult);
+        colorcontrol_register_offset(v1_offset);
+        colorcontrol_register_multiplier(s6->pdata->factory_info->color_adj.mult);
 #endif
 
 	dev_dbg(&dssdev->dev, "s6e8aa0_probe\n");
