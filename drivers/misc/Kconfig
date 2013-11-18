@@ -585,12 +585,6 @@ config COLOR_CONTROL
 	help
 	  Say Y here to enable Color Control
 
-config CUSTOM_VOLTAGE
-	bool "Support for Custom Voltage"
-	default y
-	help
-	  Say Y here to enable Custom Voltage
-
 config FSYNC_CONTROL
         bool "Support for FSync Control"
         default y
