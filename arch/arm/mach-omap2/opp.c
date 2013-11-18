@@ -27,7 +27,7 @@
 #include "dvfs.h"
 
 #ifdef CONFIG_CUSTOM_VOLTAGE
-#include <linux/custom_voltage.h>
+extern void customvoltage_register_oppdevice(struct device * dev, char * dev_name);
 #endif
 
 /* Temp variable to allow multiple calls */
