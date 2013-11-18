@@ -12,7 +12,6 @@
 #include <linux/miscdevice.h>
 #include <linux/opp.h>
 #include <linux/slab.h>
-#include <linux/plist.h>
 
 #include "../../arch/arm/mach-omap2/voltage.h"
 #include "../../arch/arm/mach-omap2/smartreflex.h"
@@ -36,21 +35,7 @@ struct device_opp {
     struct list_head opp_list;
 };
 
-struct omap_vdd_user_list {
-    struct device * dev;
-    struct plist_node node;
-};
-
-struct omap_vdd_dvfs_info {
-    struct list_head node;
-
-    spinlock_t user_lock; /* spin lock */
-    struct plist_head vdd_user_list;
-    struct voltagedomain * voltdm;
-    struct list_head dev_list;
-};
-
-static int num_mpuvolt, num_corevolt, num_ivavolt, num_mpudeps, num_ivadeps;
+int num_mpuvolt, num_corevolt, num_ivavolt;
 
 static struct mutex * frequency_mutex = NULL;
 static struct mutex * dvfs_mutex = NULL;
@@ -62,7 +47,6 @@ static u32 ** mpu_voltages = NULL;
 static struct device * mpu_device = NULL;
 
 static struct voltagedomain * mpu_voltdm = NULL;
-static struct omap_vdd_dvfs_info * mpu_dvfsinfo = NULL;
 
 static int * mpu_depend = NULL;
 
@@ -78,7 +62,6 @@ static struct device * fdif_device = NULL;
 static struct device * hsi_device = NULL;
 
 static struct voltagedomain * core_voltdm = NULL;
-static struct omap_vdd_dvfs_info * core_dvfsinfo = NULL;
 
 static int * gpu_depend = NULL;
 static int * l3_depend = NULL;
@@ -99,7 +82,6 @@ static struct device * dsp_device = NULL;
 static struct device * aess_device = NULL;
 
 static struct voltagedomain * iva_voltdm = NULL;
-static struct omap_vdd_dvfs_info * iva_dvfsinfo = NULL;
 
 static int * iva_depend = NULL;
 static int * dsp_depend = NULL;
@@ -109,16 +91,12 @@ static struct opp ** iva_opp = NULL;
 static struct opp ** dsp_opp = NULL;
 static struct opp ** aess_opp = NULL;
 
-static int * mpu_depindex = NULL;
-static int * mpucore_depindex = NULL;
-
-static int * iva_depindex = NULL;
-static int * ivacore_depindex = NULL;
+static int * mpu_coredep = NULL;
+static int * iva_coredep = NULL;
 
 static unsigned long * new_voltages = NULL;
 
 extern struct device_opp * find_device_opp(struct device * dev);
-extern struct omap_vdd_dvfs_info * _voltdm_to_dvfs_info(struct voltagedomain * voltdm);
 
 void customvoltage_register_freqmutex(struct mutex * freqmutex)
 {
@@ -198,8 +176,6 @@ void customvoltage_init(void)
     // MPU voltage domain
     mpu_voltdm = voltdm_lookup("mpu");
 
-    mpu_dvfsinfo = _voltdm_to_dvfs_info(mpu_voltdm);
-
     num_mpuvolt = 0;
 
     volt_data = mpu_voltdm->vdd->volt_data;
@@ -256,8 +232,6 @@ void customvoltage_init(void)
 
     // core voltage domain
     core_voltdm = voltdm_lookup("core");
-
-    core_dvfsinfo = _voltdm_to_dvfs_info(core_voltdm);
 
     num_corevolt = 0;
 
@@ -409,8 +383,6 @@ void customvoltage_init(void)
     // IVA voltage domain
     iva_voltdm = voltdm_lookup("iva");
 
-    iva_dvfsinfo = _voltdm_to_dvfs_info(iva_voltdm);
-
     num_ivavolt = 0;
 
     volt_data = iva_voltdm->vdd->volt_data;
@@ -527,55 +499,35 @@ void customvoltage_init(void)
 		}
 	}
 
-    // MPU->core and IVA->core dependency tables
-    num_mpudeps = mpu_voltdm->vdd->dep_vdd_info->nr_dep_entries;
+    // MPU->core and IVA->core dependencies
+    mpu_coredep = kzalloc(num_mpuvolt * sizeof(int), GFP_KERNEL);
 
-    mpu_depindex = kzalloc(num_mpudeps * sizeof(int), GFP_KERNEL);
-    mpucore_depindex = kzalloc(num_mpudeps * sizeof(int), GFP_KERNEL);
-
-    for (i = 0; i < num_mpudeps; i++)
+    for (i = 0; i < num_mpuvolt; i++)
 	{
-	    for (j = 0; j < num_mpuvolt; j++)
-		{
-		    if (mpu_voltdm->vdd->dep_vdd_info->dep_table[i].main_vdd_volt
-			== mpu_voltdm->vdd->volt_data[j].volt_nominal)
-			{
-			    mpu_depindex[i] = j;
-			}
-		}
-
 	    for (j = 0; j < num_corevolt; j++)
 		{
 		    if (mpu_voltdm->vdd->dep_vdd_info->dep_table[i].dep_vdd_volt
 			== core_voltdm->vdd->volt_data[j].volt_nominal)
 			{
-			    mpucore_depindex[i] = j;
+			    mpu_coredep[i] = j;
+
+			    break;
 			}
 		}
 	}
 
-    num_ivadeps = iva_voltdm->vdd->dep_vdd_info->nr_dep_entries;
+    iva_coredep = kzalloc(num_ivavolt * sizeof(int), GFP_KERNEL);
 
-    iva_depindex = kzalloc(num_ivadeps * sizeof(int), GFP_KERNEL);
-    ivacore_depindex = kzalloc(num_ivadeps * sizeof(int), GFP_KERNEL);
-
-    for (i = 0; i < num_ivadeps; i++)
+    for (i = 0; i < num_ivavolt; i++)
 	{
-	    for (j = 0; j < num_ivavolt; j++)
-		{
-		    if (iva_voltdm->vdd->dep_vdd_info->dep_table[i].main_vdd_volt
-			== iva_voltdm->vdd->volt_data[j].volt_nominal)
-			{
-			    iva_depindex[i] = j;
-			}
-		}
-
 	    for (j = 0; j < num_corevolt; j++)
 		{
-		    if (iva_voltdm->vdd->dep_vdd_info->dep_table[i].dep_vdd_volt
+		    if (iva_voltdm->vdd->dep_vdd_info->dep_table[i].dep_vdd_volt 
 			== core_voltdm->vdd->volt_data[j].volt_nominal)
 			{
-			    ivacore_depindex[i] = j;
+			    iva_coredep[i] = j;
+
+			    break;
 			}
 		}
 	}
@@ -603,40 +555,20 @@ static void customvoltage_mpuvolt_update(void)
 {
     int i, j;
 
-    struct omap_vdd_user_list * vdd_user;
-
     mutex_lock(frequency_mutex);
     mutex_lock(dvfs_mutex);
-
-    spin_lock(&mpu_dvfsinfo->user_lock);
-
-    plist_for_each_entry(vdd_user, &mpu_dvfsinfo->vdd_user_list, node)
-	{
-	    for (i = 0; i < num_mpuvolt; i++)
-		{
-		    if (vdd_user->node.prio == mpu_voltdm->vdd->volt_data[i].volt_nominal)
-			{
-			    vdd_user->node.prio = new_voltages[i];
-			    
-			    break;
-			}
-		}
-	}
-
+    
     for (i = 0; i < num_mpuvolt; i++)
 	{
 	    mpu_voltdm->vdd->volt_data[i].volt_nominal = new_voltages[i];
 	    mpu_voltdm->vdd->volt_data[i].volt_calibrated = 0;
 
+	    mpu_voltdm->vdd->dep_vdd_info->dep_table[i].main_vdd_volt = new_voltages[i];
+
 	    for (j = 0; j < num_mpufreqs; j++)
 		if (mpu_depend[j] == i)
 		    mpu_opp[j]->u_volt = new_voltages[i];
 	}
-
-    for (i = 0; i < num_mpudeps; i++)
-	mpu_voltdm->vdd->dep_vdd_info->dep_table[i].main_vdd_volt = new_voltages[mpu_depindex[i]];
-
-    spin_unlock(&mpu_dvfsinfo->user_lock);
 
     omap_sr_disable_reset_volt(mpu_voltdm);
     omap_sr_enable(mpu_voltdm, omap_voltage_get_curr_vdata(mpu_voltdm));
@@ -706,30 +638,21 @@ static void customvoltage_corevolt_update(void)
 {
     int i, j;
 
-    struct omap_vdd_user_list * vdd_user;
-
     mutex_lock(frequency_mutex);
     mutex_lock(dvfs_mutex);
-
-    spin_lock(&core_dvfsinfo->user_lock);
-
-    plist_for_each_entry(vdd_user, &core_dvfsinfo->vdd_user_list, node)
-	{
-	    for (i = 0; i < num_corevolt; i++)
-		{
-		    if (vdd_user->node.prio == core_voltdm->vdd->volt_data[i].volt_nominal)
-			{
-			    vdd_user->node.prio = new_voltages[i];
-			    
-			    break;
-			}
-		}
-	}
-
+    
     for (i = 0; i < num_corevolt; i++)
 	{
 	    core_voltdm->vdd->volt_data[i].volt_nominal = new_voltages[i];
 	    core_voltdm->vdd->volt_data[i].volt_calibrated = 0;
+
+	    for (j = 0; j < num_mpuvolt; j++)
+		if (mpu_coredep[j] == i)
+		    mpu_voltdm->vdd->dep_vdd_info->dep_table[j].dep_vdd_volt = new_voltages[i];
+
+	    for (j = 0; j < num_ivavolt; j++)
+		if (iva_coredep[j] == i)
+		    iva_voltdm->vdd->dep_vdd_info->dep_table[j].dep_vdd_volt = new_voltages[i];
 
 	    for (j = 0; j < num_gpufreqs; j++)
 		if (gpu_depend[j] == i)
@@ -747,14 +670,6 @@ static void customvoltage_corevolt_update(void)
 		if (hsi_depend[j] == i)
 		    hsi_opp[j]->u_volt = new_voltages[i];
 	}
-
-    for (i = 0; i < num_mpudeps; i++)
-	mpu_voltdm->vdd->dep_vdd_info->dep_table[i].dep_vdd_volt = new_voltages[mpucore_depindex[i]];
-
-    for (i = 0; i < num_ivadeps; i++)
-	iva_voltdm->vdd->dep_vdd_info->dep_table[i].dep_vdd_volt = new_voltages[ivacore_depindex[i]];
-
-    spin_unlock(&core_dvfsinfo->user_lock);
 
     omap_sr_disable_reset_volt(core_voltdm);
     omap_sr_enable(core_voltdm, omap_voltage_get_curr_vdata(core_voltdm));
@@ -823,30 +738,15 @@ static void customvoltage_ivavolt_update(void)
 {
     int i, j;
 
-    struct omap_vdd_user_list * vdd_user;
-
     mutex_lock(frequency_mutex);
     mutex_lock(dvfs_mutex);
-
-    spin_lock(&iva_dvfsinfo->user_lock);
-
-    plist_for_each_entry(vdd_user, &iva_dvfsinfo->vdd_user_list, node)
-	{
-	    for (i = 0; i < num_ivavolt; i++)
-		{
-		    if (vdd_user->node.prio == iva_voltdm->vdd->volt_data[i].volt_nominal)
-			{
-			    vdd_user->node.prio = new_voltages[i];
-			    
-			    break;
-			}
-		}
-	}
-
+    
     for (i = 0; i < num_ivavolt; i++)
 	{
 	    iva_voltdm->vdd->volt_data[i].volt_nominal = new_voltages[i];
 	    iva_voltdm->vdd->volt_data[i].volt_calibrated = 0;
+
+	    iva_voltdm->vdd->dep_vdd_info->dep_table[i].main_vdd_volt = new_voltages[i];
 
 	    for (j = 0; j < num_ivafreqs; j++)
 		if (iva_depend[j] == i)
@@ -860,11 +760,6 @@ static void customvoltage_ivavolt_update(void)
 		if (aess_depend[j] == i)
 		    aess_opp[j]->u_volt = new_voltages[i];
 	}
-
-    for (i = 0; i < num_ivadeps; i++)
-	iva_voltdm->vdd->dep_vdd_info->dep_table[i].main_vdd_volt = new_voltages[iva_depindex[i]];
-
-    spin_unlock(&iva_dvfsinfo->user_lock);
 
     omap_sr_disable_reset_volt(iva_voltdm);
     omap_sr_enable(iva_voltdm, omap_voltage_get_curr_vdata(iva_voltdm));
