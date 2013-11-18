@@ -398,8 +398,6 @@ config OMAP4_PPA_CPU1_ONLINE_BUG
 	  If, on the other hand, you do not understand the change, leave the
 	  default as enabled.
 
-endmenu
-
 config ANDROID_OOM_KILLER
         bool "Android OOM Killer"
         default n
