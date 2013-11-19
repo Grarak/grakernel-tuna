@@ -69,6 +69,14 @@
 #define ICE40_LED_BLUE_H   0x15
 #define ICE40_LED_BLUE_L   0x16
 
+/* Grayscale (white/Y) mode */
+#define ICE40_LED_YR_H     0x29
+#define ICE40_LED_YR_L     0x2A
+#define ICE40_LED_YG_H     0x2B
+#define ICE40_LED_YG_L     0x2C
+#define ICE40_LED_YB_H     0x2D
+#define ICE40_LED_YB_L     0x2E
+
 #define ICE40_LCOS       0x03
 #define ICE40_LCOS_DISP_ENB     0x01
 
@@ -108,6 +116,12 @@ static const u8 ice40_regs[] = {
   ICE40_LED_GREEN_L,
   ICE40_LED_BLUE_H,
   ICE40_LED_BLUE_L,
+  ICE40_LED_YR_H,
+  ICE40_LED_YR_L,
+  ICE40_LED_YG_H,
+  ICE40_LED_YG_L,
+  ICE40_LED_YB_H,
+  ICE40_LED_YB_L,
 };
 
 struct gamma_point {
@@ -276,7 +290,9 @@ static void panel_notle_power_off(struct omap_dss_device *dssdev);
 static int panel_notle_power_on(struct omap_dss_device *dssdev);
 static int ice40_read_register(u8 reg_addr);
 static int ice40_write_register(u8 reg_addr, u8 reg_value);
-static int ice40_set_backlight(int led_en, int r, int g, int b);
+static int ice40_set_backlight(int led_en,
+                               int r, int g, int b,
+                               int yr, int yg, int yb);
 static int fpga_read_revision(void);
 static void led_config_to_linecuts(struct omap_dss_device *dssdev,
                                    struct led_config *led, int *red_linecut,
@@ -434,9 +450,14 @@ static ssize_t colormix_store(struct notle_drv_data *notle_data,
         }
 
         if (notle_data->enabled && led_config.brightness) {
+              int yr, yg, yb;
+              struct led_config white_led = led_config;
               led_config_to_linecuts(notle_data->dssdev, &led_config,
                                      &red, &green, &blue);
-              if (ice40_set_backlight(1, red, green, blue)) {
+              white_led.brightness /= 3;
+              led_config_to_linecuts(notle_data->dssdev, &white_led,
+                                     &yr, &yg, &yb);
+              if (ice40_set_backlight(1, red, green, blue, yr, yg, yb)) {
                 printk(KERN_ERR LOG_TAG "Failed to colormix_store:"
                        " spi write failed\n");
               }
@@ -795,14 +816,19 @@ static ssize_t brightness_store(struct notle_drv_data *notle_data,
          */
         if (notle_data->enabled) {
             if (led_config.brightness) {
+                int yr, yg, yb;
+                struct led_config white_led = led_config;
                 led_config_to_linecuts(notle_data->dssdev, &led_config,
-                                   &r, &g, &b);
-                if (ice40_set_backlight(1, r, g, b)) {
+                                       &r, &g, &b);
+                white_led.brightness /= 3;
+                led_config_to_linecuts(notle_data->dssdev, &white_led,
+                                       &yr, &yg, &yb);
+                if (ice40_set_backlight(1, r, g, b, yr, yg, yb)) {
                     printk(KERN_ERR LOG_TAG "Failed to brightness_store: "
                          "spi write failed\n");
                 }
             } else {
-                if (ice40_set_backlight(0, -1, -1, -1)) {
+                if (ice40_set_backlight(0, -1, -1, -1, -1, -1, -1)) {
                     printk(KERN_ERR LOG_TAG "Failed to brightness_store: "
                        "spi write failed\n");
                 }
@@ -1102,7 +1128,9 @@ static int ice40_write_register(u8 reg_addr, u8 reg_value) {
  * Set backlight parameters.  Pass -1 to any argument to ignore that value and
  * not set it in the relevant register.
  */
-static int ice40_set_backlight(int led_en, int r, int g, int b) {
+static int ice40_set_backlight(int led_en,
+                               int r, int g, int b,
+                               int yr, int yg, int yb) {
   int val;
   int ret = 0;
 
@@ -1111,14 +1139,20 @@ static int ice40_set_backlight(int led_en, int r, int g, int b) {
   if (r > -1) {
     ret |= ice40_write_register(ICE40_LED_RED_H, (r & 0xff00) >> 8);
     ret |= ice40_write_register(ICE40_LED_RED_L, (r & 0xff));
+    ret |= ice40_write_register(ICE40_LED_YR_H, (yr & 0xff00) >> 8);
+    ret |= ice40_write_register(ICE40_LED_YR_L, (yr & 0xff));
   }
   if (g > -1) {
     ret |= ice40_write_register(ICE40_LED_GREEN_H, (g & 0xff00) >> 8);
     ret |= ice40_write_register(ICE40_LED_GREEN_L, (g & 0xff));
+    ret |= ice40_write_register(ICE40_LED_YG_H, (yg & 0xff00) >> 8);
+    ret |= ice40_write_register(ICE40_LED_YG_L, (yg & 0xff));
   }
   if (b > -1) {
     ret |= ice40_write_register(ICE40_LED_BLUE_H, (b & 0xff00) >> 8);
     ret |= ice40_write_register(ICE40_LED_BLUE_L, (b & 0xff));
+    ret |= ice40_write_register(ICE40_LED_YB_H, (yb & 0xff00) >> 8);
+    ret |= ice40_write_register(ICE40_LED_YB_L, (yb & 0xff));
   }
 
   if (led_en > -1) {
@@ -1450,9 +1484,13 @@ static int panel_notle_power_on(struct omap_dss_device *dssdev) {
 
         /* Enable LED backlight if we have nonzero brightness */
         if (led_config.brightness > 0) {
+              int yr, yg, yb;
+              struct led_config white_led = led_config;
               msleep(1);
               led_config_to_linecuts(dssdev, &led_config, &r, &g, &b);
-              ice40_set_backlight(1, r, g, b);
+              white_led.brightness /= 3;
+              led_config_to_linecuts(dssdev, &white_led, &yr, &yg, &yb);
+              ice40_set_backlight(1, r, g, b, yr, yg, yb);
         }
 
         drv_data->enabled = 1;
@@ -1483,7 +1521,7 @@ static void panel_notle_power_off(struct omap_dss_device *dssdev) {
 
         /* Disable LED backlight */
         /* Don't change the color mix, just disable the backlight. */
-        if (ice40_set_backlight(0, -1, -1, -1)) {
+        if (ice40_set_backlight(0, -1, -1, -1, -1, -1, -1)) {
           printk(KERN_ERR LOG_TAG "Failed to disable iCE40 FPGA LED_EN\n");
         }
         /* Save register values so we can restore them when we power on. */
