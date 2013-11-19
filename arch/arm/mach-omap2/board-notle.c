@@ -449,11 +449,13 @@ static void __init notle_init_early(void)
 }
 
 static int notle_enable_dpi(struct omap_dss_device *dssdev) {
+        omap_mux_set_signal("dpm_emu8.dispc2_pclk", OMAP_PIN_OUTPUT);
         gpio_set_value(dssdev->reset_gpio, 1);
         return 0;
 }
 
 static void notle_disable_dpi(struct omap_dss_device *dssdev) {
+        omap_mux_set_signal("dpm_emu8.safe_mode", OMAP_PIN_OFF_NONE);
         gpio_set_value(dssdev->reset_gpio, 0);
 }
 

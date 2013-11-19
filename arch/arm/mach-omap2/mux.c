@@ -265,6 +265,11 @@ int __init omap_mux_get_by_name(const char *muxname,
 
 int __init omap_mux_init_signal(const char *muxname, int val)
 {
+	return omap_mux_set_signal(muxname, val);
+}
+
+int omap_mux_set_signal(const char *muxname, int val)
+{
 	struct omap_mux_partition *partition = NULL;
 	struct omap_mux *mux = NULL;
 	u16 old_mode;

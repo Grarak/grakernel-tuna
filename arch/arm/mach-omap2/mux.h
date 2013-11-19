@@ -212,6 +212,13 @@ int omap_mux_init_gpio(int gpio, int val);
 int omap_mux_init_signal(const char *muxname, int val);
 
 /**
+ * omap_mux_set_signal - set a signal based on the signal name
+ * @muxname:		Mux name in mode0_name.signal_name format
+ * @val:		Options for the mux register value
+ */
+int omap_mux_set_signal(const char *muxname, int val);
+
+/**
  * omap_hwmod_mux_init - initialize hwmod specific mux data
  * @bpads:		Board specific device signal names
  * @nr_pads:		Number of signal names for the device
