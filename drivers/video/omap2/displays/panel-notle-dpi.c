@@ -62,24 +62,24 @@
 #define ICE40_BACKLIGHT_FORCEG  0x02
 #define ICE40_BACKLIGHT_FORCEB  0x01
 
-#define ICE40_LED_RED_H    0x11
-#define ICE40_LED_RED_L    0x12
-#define ICE40_LED_GREEN_H  0x13
-#define ICE40_LED_GREEN_L  0x14
-#define ICE40_LED_BLUE_H   0x15
-#define ICE40_LED_BLUE_L   0x16
+const static u8 led_matrix_addr[4][3] = {
+  { 0x11, 0x17, 0x23 },
+  { 0x19, 0x13, 0x25 },
+  { 0x1B, 0x27, 0x15 },
+  { 0x29, 0x2B, 0x2D }
+};
 
-/* Grayscale (white/Y) mode */
-#define ICE40_LED_YR_H     0x29
-#define ICE40_LED_YR_L     0x2A
-#define ICE40_LED_YG_H     0x2B
-#define ICE40_LED_YG_L     0x2C
-#define ICE40_LED_YB_H     0x2D
-#define ICE40_LED_YB_L     0x2E
+#define ICE40_LED_RR_H     (led_matrix_addr[0][0])
+#define ICE40_LED_RR_L     (led_matrix_addr[0][0]+1)
+#define ICE40_LED_GG_H     (led_matrix_addr[1][1])
+#define ICE40_LED_GG_L     (led_matrix_addr[1][1]+1)
+#define ICE40_LED_BB_H     (led_matrix_addr[2][2])
+#define ICE40_LED_BB_L     (led_matrix_addr[2][2]+1)
 
-#define ICE40_LCOS       0x03
+#define ICE40_LCOS         0x03
 #define ICE40_LCOS_DISP_ENB     0x01
 
+#define FINAL_LINECUT_BASED_FPGA_REVISION 0x3e
 /*
  * TODO(petermalkin): remove definitions of notle_version from here.
  * Move them to some place else where they could be shared by other
@@ -110,18 +110,6 @@ static const u8 ice40_regs[] = {
   ICE40_PIPELINE,
   ICE40_LCOS,
   ICE40_BACKLIGHT,
-  ICE40_LED_RED_H,
-  ICE40_LED_RED_L,
-  ICE40_LED_GREEN_H,
-  ICE40_LED_GREEN_L,
-  ICE40_LED_BLUE_H,
-  ICE40_LED_BLUE_L,
-  ICE40_LED_YR_H,
-  ICE40_LED_YR_L,
-  ICE40_LED_YG_H,
-  ICE40_LED_YG_L,
-  ICE40_LED_YB_H,
-  ICE40_LED_YB_L,
 };
 
 struct gamma_point {
@@ -290,13 +278,12 @@ static void panel_notle_power_off(struct omap_dss_device *dssdev);
 static int panel_notle_power_on(struct omap_dss_device *dssdev);
 static int ice40_read_register(u8 reg_addr);
 static int ice40_write_register(u8 reg_addr, u8 reg_value);
-static int ice40_set_backlight(int led_en,
-                               int r, int g, int b,
-                               int yr, int yg, int yb);
+static int ice40_set_backlight(int led_en, int rev, int (*rgbmat)[3]);
 static int fpga_read_revision(void);
 static void led_config_to_linecuts(struct omap_dss_device *dssdev,
-                                   struct led_config *led, int *red_linecut,
-                                   int *green_linecut, int *blue_linecut);
+                                   struct led_config *led,
+                                   int rev,
+                                   int (*rgbmat)[3]);
 static void fpga_reconfigure(struct notle_drv_data *notle_data);
 
 /* Sysfs interface */
@@ -317,6 +304,7 @@ static ssize_t sysfs_reset(struct notle_drv_data *notle_data,
         }
         return size;
 }
+
 static ssize_t fpga_revision(struct notle_drv_data *notle_data, char *buf) {
         int rev = fpga_read_revision();
 
@@ -335,9 +323,10 @@ static ssize_t fpga_revision(struct notle_drv_data *notle_data, char *buf) {
 
         return snprintf(buf, PAGE_SIZE, "0x%02x\n", fpga_rev);
 }
+
 static ssize_t dump_regs(struct notle_drv_data *notle_data,
                          char *buf) {
-        int i, val;
+        int i, j, val;
 
         *buf = '\0';
         if (notle_version_supported()) {
@@ -348,14 +337,33 @@ static ssize_t dump_regs(struct notle_drv_data *notle_data,
                        buf, ice40_regs[i]);
             } else {
               snprintf(tmp_buf, PAGE_SIZE, "%s0x%02x: 0x%02x\n",
-                       buf, ice40_regs[i], (u8)(val & 0xff));
+                       buf, ice40_regs[i], (val & 0xff));
             }
             strncpy(buf, tmp_buf, PAGE_SIZE);
           }
+          for (i = 0; i < sizeof(led_matrix_addr)/sizeof(led_matrix_addr[0]); i++)
+            for (j = 0; j < sizeof(led_matrix_addr[0])/sizeof(led_matrix_addr[0][0]); j++) {
+              u8 addr = led_matrix_addr[i][j];
+              int val_hi, val_lo;
+              val_hi = ice40_read_register(addr);
+              val_lo = ice40_read_register(addr+1);
+              if (val_hi < 0 ) {
+                snprintf(tmp_buf, PAGE_SIZE, "%s0x%02x: FAILED\n",
+                         buf, addr);
+              } else if (val_lo < 0 ) {
+                snprintf(tmp_buf, PAGE_SIZE, "%s0x%02x: FAILED\n",
+                         buf, addr+1);
+              } else {
+                snprintf(tmp_buf, PAGE_SIZE, "%s0x%02x: 0x%02x%02x\n",
+                         buf, addr, (val_hi & 0xff), (val_lo & 0xff));
+              }
+              strncpy(buf, tmp_buf, PAGE_SIZE);
+            }
         }
 
         return strlen(buf);
 }
+
 static ssize_t enabled_show(struct notle_drv_data *notle_data, char *buf) {
         return snprintf(buf, PAGE_SIZE, "%d\n",
                         notle_data->enabled);
@@ -450,14 +458,11 @@ static ssize_t colormix_store(struct notle_drv_data *notle_data,
         }
 
         if (notle_data->enabled && led_config.brightness) {
-              int yr, yg, yb;
-              struct led_config white_led = led_config;
+              int rgbmat[4][3];
+              const int rev = fpga_read_revision();
               led_config_to_linecuts(notle_data->dssdev, &led_config,
-                                     &red, &green, &blue);
-              white_led.brightness /= 3;
-              led_config_to_linecuts(notle_data->dssdev, &white_led,
-                                     &yr, &yg, &yb);
-              if (ice40_set_backlight(1, red, green, blue, yr, yg, yb)) {
+                                     rev, rgbmat);
+              if (ice40_set_backlight(1, rev, rgbmat)) {
                 printk(KERN_ERR LOG_TAG "Failed to colormix_store:"
                        " spi write failed\n");
               }
@@ -791,7 +796,7 @@ static ssize_t brightness_show(struct notle_drv_data *notle_data, char *buf) {
 }
 static ssize_t brightness_store(struct notle_drv_data *notle_data,
                                 const char *buf, size_t size) {
-        int r, g, b, value;
+        int r, value;
         r = kstrtoint(buf, 0, &value);
         if (r)
           return r;
@@ -816,19 +821,16 @@ static ssize_t brightness_store(struct notle_drv_data *notle_data,
          */
         if (notle_data->enabled) {
             if (led_config.brightness) {
-                int yr, yg, yb;
-                struct led_config white_led = led_config;
+                int rgbmat[4][3];
+                const int rev = fpga_read_revision();
                 led_config_to_linecuts(notle_data->dssdev, &led_config,
-                                       &r, &g, &b);
-                white_led.brightness /= 3;
-                led_config_to_linecuts(notle_data->dssdev, &white_led,
-                                       &yr, &yg, &yb);
-                if (ice40_set_backlight(1, r, g, b, yr, yg, yb)) {
+                                       rev, rgbmat);
+                if (ice40_set_backlight(1, rev, rgbmat)) {
                     printk(KERN_ERR LOG_TAG "Failed to brightness_store: "
                          "spi write failed\n");
                 }
             } else {
-                if (ice40_set_backlight(0, -1, -1, -1, -1, -1, -1)) {
+                if (ice40_set_backlight(0, 0, NULL)) {
                     printk(KERN_ERR LOG_TAG "Failed to brightness_store: "
                        "spi write failed\n");
                 }
@@ -847,6 +849,9 @@ static ssize_t gamma_show(struct notle_drv_data *notle_data, char *buf,
                         gamma_curve[gamma].green_n,
                         gamma_curve[gamma].blue_n);
 }
+
+static int panel_write_register(u8 reg, u8 value);
+
 static ssize_t gamma_store(struct notle_drv_data *notle_data, const char *buf,
                            size_t size, int gamma) {
         unsigned int r_p, g_p, b_p, r_n, g_n, b_n;
@@ -869,6 +874,22 @@ static ssize_t gamma_store(struct notle_drv_data *notle_data, const char *buf,
         gamma_curve[gamma].red_n   = (u8)(r_n & 0xFF);
         gamma_curve[gamma].green_n = (u8)(g_n & 0xFF);
         gamma_curve[gamma].blue_n  = (u8)(b_n & 0xFF);
+        {
+          const int gamma_reg = 0x21;
+          const int j = gamma;
+          panel_write_register(gamma_reg + (6 * j) + 0,
+                               gamma_curve[j].red_p);
+          panel_write_register(gamma_reg + (6 * j) + 1,
+                               gamma_curve[j].green_p);
+          panel_write_register(gamma_reg + (6 * j) + 2,
+                               gamma_curve[j].blue_p);
+          panel_write_register(gamma_reg + (6 * j) + 3,
+                               gamma_curve[j].red_n);
+          panel_write_register(gamma_reg + (6 * j) + 4,
+                               gamma_curve[j].green_n);
+          panel_write_register(gamma_reg + (6 * j) + 5,
+                               gamma_curve[j].blue_n);
+        }
         return size;
 }
 #define GAMMA_SHOW_STORE(x) \
@@ -1010,26 +1031,30 @@ static struct kobj_type panel_notle_ktype = {
 
 /* Utility functions */
 static void led_config_to_linecuts(struct omap_dss_device *dssdev,
-                                   struct led_config *led, int *red_linecut,
-                                   int *green_linecut, int *blue_linecut) {
-        int red, green, blue;
+                                   struct led_config *led,
+                                   int rev,
+                                   int (*rgbmat)[3]) {
+        int red, grn, blu;
+        int *red_linecut = rgbmat[0]+0;
+        int *grn_linecut = rgbmat[1]+1;
+        int *blu_linecut = rgbmat[2]+2;
         int total_lines = dssdev->panel.timings.y_res +
             dssdev->panel.timings.vfp +
             dssdev->panel.timings.vsw +
             dssdev->panel.timings.vbp;
         struct panel_notle_data *panel_data = get_panel_data(dssdev);
 
-        red = *red_linecut     = (int)(total_lines *
+        red = *red_linecut   = (int)(total_lines *
                                   (10000 - (
                                    (3 * led->red_percent * led->brightness * panel_data->limit_mw) /
                                    (panel_data->red_max_mw * MAX_BRIGHTNESS)))) /
                                  10000;
-        green = *green_linecut = (int)(total_lines *
+        grn = *grn_linecut = (int)(total_lines *
                                   (10000 - (
                                    (3 * led->green_percent * led->brightness * panel_data->limit_mw) /
                                    (panel_data->green_max_mw * MAX_BRIGHTNESS)))) /
                                  10000;
-        blue =  *blue_linecut  = (int)(total_lines *
+        blu =  *blu_linecut = (int)(total_lines *
                                   (10000 - (
                                    (3 * led->blue_percent * led->brightness * panel_data->limit_mw) /
                                    (panel_data->blue_max_mw * MAX_BRIGHTNESS)))) /
@@ -1044,26 +1069,93 @@ static void led_config_to_linecuts(struct omap_dss_device *dssdev,
          */
         if (*red_linecut > dssdev->panel.timings.y_res - 3)
           *red_linecut = dssdev->panel.timings.y_res - 3;
-        if (*green_linecut > dssdev->panel.timings.y_res - 3)
-          *green_linecut = dssdev->panel.timings.y_res - 3;
-        if (*blue_linecut > dssdev->panel.timings.y_res - 3)
-          *blue_linecut = dssdev->panel.timings.y_res - 3;
+        if (*grn_linecut > dssdev->panel.timings.y_res - 3)
+          *grn_linecut = dssdev->panel.timings.y_res - 3;
+        if (*blu_linecut > dssdev->panel.timings.y_res - 3)
+          *blu_linecut = dssdev->panel.timings.y_res - 3;
 
         /* Disable any channels that are explicitly at zero percent */
         if (!led->red_percent) *red_linecut = total_lines;
-        if (!led->green_percent) *green_linecut = total_lines;
-        if (!led->blue_percent) *blue_linecut = total_lines;
+        if (!led->green_percent) *grn_linecut = total_lines;
+        if (!led->blue_percent) *blu_linecut = total_lines;
 
         /* Set to full-brightness any channels that overflowed */
         if (*red_linecut < 0) *red_linecut = 0;
-        if (*green_linecut < 0) *green_linecut = 0;
-        if (*blue_linecut < 0) *blue_linecut = 0;
+        if (*grn_linecut < 0) *grn_linecut = 0;
+        if (*blu_linecut < 0) *blu_linecut = 0;
 
-        if (red != *red_linecut || green != *green_linecut || blue != *blue_linecut) {
+        if (red != *red_linecut || grn != *grn_linecut || blu != *blu_linecut) {
           printk(KERN_INFO LOG_TAG "Linecuts truncated: %i/%i/%i -> %i/%i/%i"
                  ", Config: %u/%u/%u/%u\n",
-                 red, green, blue, *red_linecut, *green_linecut, *blue_linecut,
+                 red, grn, blu, *red_linecut, *grn_linecut, *blu_linecut,
                  led->brightness, led->red_percent, led->green_percent, led->blue_percent);
+        }
+        else
+          printk(KERN_INFO LOG_TAG "Linecuts: %i/%i/%i"
+                 ", Config: %u/%u/%u/%u\n",
+                 red, grn, blu,
+                 led->brightness, led->red_percent, led->green_percent, led->blue_percent);
+
+        if (rev > FINAL_LINECUT_BASED_FPGA_REVISION) {
+          int i,j;
+          const struct omap_video_timings *t = &(dssdev->panel.timings);
+          const int vres = t->y_res;
+          const int htot = t->hfp + t->hsw + t->x_res + t->hbp;
+          const int pixels_in_frame = htot*(t->vfp + t->vsw + vres + t->vbp);
+          const int count_rescale = 7;
+          const struct omap_dss_cpr_coefs *c = &(panel_data->cpr_coefs);
+          const int backlight_state = ice40_read_register(ICE40_BACKLIGHT);
+          struct omap_overlay_manager_info info;
+          for (i = 0; i < 3; i++)
+            for (j = 0; j < 3; j++)
+              if (i != j)
+                rgbmat[i][j] = 0;
+          // 357 -> 3 lines -> 25us -> 728*3/128 = 17
+          // 0 -> 360 lines -> 3.06ms -> 728*360/128 = 2047
+          /* convert to pclk counts */
+          for (i = 0; i < 3; i++) {
+            rgbmat[i][i] = htot*(vres-rgbmat[i][i]);
+          }
+          red = *red_linecut;
+          grn = *grn_linecut;
+          blu = *blu_linecut;
+          /* WARNING: Do not rely on panel_data->cpr_enable.  It is used at
+           * driver probe time to set cpr_enable in dssdev->manager->info.cpr_enable
+           * but is not updated on subsequent changes made through
+           * /sys/devices/platform/omapdss/manager2/cpr_enable
+           */
+          dssdev->manager->get_manager_info(dssdev->manager, &info);
+          if (info.cpr_enable == 0) {
+            /* Apply cpr in the LED illumination schedule.
+             * My preference would be a for loop, but struct omap_dss_cpr_coefs
+             * declares the "matrix" as a list of scalars :-(
+             */
+            rgbmat[0][0] = c->rr < 0 ? 0 : (red*c->rr+128)>>8;
+            rgbmat[0][1] = c->rg < 0 ? 0 : (grn*c->rg+128)>>8;
+            rgbmat[0][2] = c->rb < 0 ? 0 : (blu*c->rb+128)>>8;
+            rgbmat[1][0] = c->gr < 0 ? 0 : (red*c->gr+128)>>8;
+            rgbmat[1][1] = c->gg < 0 ? 0 : (grn*c->gg+128)>>8;
+            rgbmat[1][2] = c->gb < 0 ? 0 : (blu*c->gb+128)>>8;
+            rgbmat[2][0] = c->br < 0 ? 0 : (red*c->br+128)>>8;
+            rgbmat[2][1] = c->bg < 0 ? 0 : (grn*c->bg+128)>>8;
+            rgbmat[2][2] = c->bb < 0 ? 0 : (blu*c->bb+128)>>8;
+          }
+          for (i = 0; i < 3; i++) {
+            rgbmat[3][i] = rgbmat[i][0] + rgbmat[i][1] + rgbmat[i][2];
+            if ((backlight_state & 0x80) == 0x80)
+              rgbmat[3][i] /= 3;
+            if (rgbmat[3][i] > pixels_in_frame)
+              rgbmat[3][i] = pixels_in_frame;
+          }
+
+          /* convert to rescaled counts from end of frame
+           * NB LED is on from some moment in the middle of the frame to the
+           * end of frame so that LC transition occurs as much as possible
+           * while LEDs are off.
+           */
+          for (i = 0; i < 4; i++)
+            for (j = 0; j < 3; j++)
+              rgbmat[i][j] = (pixels_in_frame-rgbmat[i][j])>>count_rescale;
         }
 
         return;
@@ -1128,31 +1220,34 @@ static int ice40_write_register(u8 reg_addr, u8 reg_value) {
  * Set backlight parameters.  Pass -1 to any argument to ignore that value and
  * not set it in the relevant register.
  */
-static int ice40_set_backlight(int led_en,
-                               int r, int g, int b,
-                               int yr, int yg, int yb) {
+static int ice40_set_backlight(int led_en, int rev, int (*rgbmat)[3]) {
   int val;
   int ret = 0;
 
-  ice40_read_register(ICE40_BACKLIGHT);
+  if (rgbmat != NULL) {
+    const int r = rgbmat[0][0];
+    const int g = rgbmat[1][1];
+    const int b = rgbmat[2][2];
 
-  if (r > -1) {
-    ret |= ice40_write_register(ICE40_LED_RED_H, (r & 0xff00) >> 8);
-    ret |= ice40_write_register(ICE40_LED_RED_L, (r & 0xff));
-    ret |= ice40_write_register(ICE40_LED_YR_H, (yr & 0xff00) >> 8);
-    ret |= ice40_write_register(ICE40_LED_YR_L, (yr & 0xff));
-  }
-  if (g > -1) {
-    ret |= ice40_write_register(ICE40_LED_GREEN_H, (g & 0xff00) >> 8);
-    ret |= ice40_write_register(ICE40_LED_GREEN_L, (g & 0xff));
-    ret |= ice40_write_register(ICE40_LED_YG_H, (yg & 0xff00) >> 8);
-    ret |= ice40_write_register(ICE40_LED_YG_L, (yg & 0xff));
-  }
-  if (b > -1) {
-    ret |= ice40_write_register(ICE40_LED_BLUE_H, (b & 0xff00) >> 8);
-    ret |= ice40_write_register(ICE40_LED_BLUE_L, (b & 0xff));
-    ret |= ice40_write_register(ICE40_LED_YB_H, (yb & 0xff00) >> 8);
-    ret |= ice40_write_register(ICE40_LED_YB_L, (yb & 0xff));
+    ice40_read_register(ICE40_BACKLIGHT);
+
+    if (rev <= FINAL_LINECUT_BASED_FPGA_REVISION) {
+      ret |= ice40_write_register(ICE40_LED_RR_H, (r & 0xff00) >> 8);
+      ret |= ice40_write_register(ICE40_LED_RR_L, (r & 0xff));
+      ret |= ice40_write_register(ICE40_LED_GG_H, (g & 0xff00) >> 8);
+      ret |= ice40_write_register(ICE40_LED_GG_L, (g & 0xff));
+      ret |= ice40_write_register(ICE40_LED_BB_H, (b & 0xff00) >> 8);
+      ret |= ice40_write_register(ICE40_LED_BB_L, (b & 0xff));
+    } else {
+      int i,j;
+      for (i = 0; i < sizeof(led_matrix_addr)/sizeof(led_matrix_addr[0]); i++)
+        for (j = 0; j < sizeof(led_matrix_addr[0])/sizeof(led_matrix_addr[0][0]); j++) {
+          const u8 addr = led_matrix_addr[i][j];
+          // TODO consider temporarily writing hi byte ff to protect against glitches--probably unnecessary
+          ret |= ice40_write_register(addr+0, (rgbmat[i][j]>>8)&0xff);
+          ret |= ice40_write_register(addr+1,  rgbmat[i][j]    &0xff);
+        }
+    }
   }
 
   if (led_en > -1) {
@@ -1221,12 +1316,14 @@ static int ice40_load(const u32 size, const u8 *bits, struct notle_drv_data *not
   u8 zero_byte = 0;
   int i;
   int r;
-  u8 bits_buffer[2048];
-  const int bufsz = sizeof bits_buffer;
+  u8 *bits_buffer;
+  const int bufsz = 32768;
+  int status = -1;
 
+  bits_buffer = kmalloc(bufsz, GFP_KERNEL);
   if (!bus_data.ice40_device) {
     printk(KERN_ERR LOG_TAG "ice40_load: No iCE40 bus data set in ice40_load()\n");
-    return -1;
+    goto err;
   }
   printk(KERN_INFO LOG_TAG "ice40_load: CDONE before deconfig %d\n", gpio_get_value(panel_data->gpio_fpga_cdone));
   /* set CS polarity *active* high so it is low when creset goes high */
@@ -1239,7 +1336,7 @@ static int ice40_load(const u32 size, const u8 *bits, struct notle_drv_data *not
 
   if (gpio_get_value(panel_data->gpio_fpga_cdone) == 1) {
     printk(KERN_WARNING LOG_TAG "CDONE high after reset wait\n");
-    return -1;
+    goto err;
   }
   /* Send blank byte preamble */
   spi_write(bus_data.ice40_device, &zero_byte, sizeof zero_byte);
@@ -1261,7 +1358,7 @@ static int ice40_load(const u32 size, const u8 *bits, struct notle_drv_data *not
   }
   if (i == 1000) {
     printk(KERN_WARNING LOG_TAG "WARNING: Timeout waiting for CDONE\n");
-    return -1;
+    goto err;
   }
 
   /* restore CS polarity */
@@ -1271,18 +1368,21 @@ static int ice40_load(const u32 size, const u8 *bits, struct notle_drv_data *not
     r = panel_data->platform_enable(dssdev);
     if (r) {
       printk(KERN_ERR LOG_TAG "Failed to platform_enable\n");
-      return -1;
+      goto err;
     }
   }
   if ((r = ice40_read_register(ICE40_REVISION)) < 0) {
     printk(KERN_WARNING LOG_TAG "Failed to read iCE40 FPGA config: %i\n", r);
-    return -1;
+    goto err;
   }
   if (r == 0xff) {
     printk(KERN_WARNING LOG_TAG "ERROR: FPGA revision 0xff is invalid\n");
-    return -1;
+    goto err;
   }
-  return 0;
+  status = 0;
+err:
+  kfree(bits_buffer);
+  return status;
 }
 
 static int fpga_reconfigure_inner(const struct firmware *fw,
@@ -1375,7 +1475,8 @@ static void fpga_reconfigure(struct notle_drv_data *notle_data) {
 
 /* Functions to perform actions on the panel and DSS driver */
 static int panel_notle_power_on(struct omap_dss_device *dssdev) {
-        int i, j, r, g, b, gamma_reg;
+        int i, j, gamma_reg;
+        int status, rev;
         struct panel_notle_data *panel_data = get_panel_data(dssdev);
         struct notle_drv_data *drv_data = dev_get_drvdata(&dssdev->dev);
         struct panel_config *panel_config = drv_data->panel_config;
@@ -1386,8 +1487,8 @@ static int panel_notle_power_on(struct omap_dss_device *dssdev) {
 
         printk(KERN_INFO LOG_TAG "Powering on\n");
 
-        r = omapdss_dpi_display_enable(dssdev);
-        if (r) {
+        status = omapdss_dpi_display_enable(dssdev);
+        if (status) {
           printk(KERN_ERR LOG_TAG "Failed to enable DPI\n");
           goto err0;
         }
@@ -1402,8 +1503,8 @@ static int panel_notle_power_on(struct omap_dss_device *dssdev) {
         }
 
         if (panel_data->platform_enable) {
-          r = panel_data->platform_enable(dssdev);
-          if (r) {
+          status = panel_data->platform_enable(dssdev);
+          if (status) {
             printk(KERN_ERR LOG_TAG "Failed to platform_enable\n");
             goto err1;
           }
@@ -1412,8 +1513,8 @@ static int panel_notle_power_on(struct omap_dss_device *dssdev) {
         /* Check FPGA is reporting a valid revision,
          * if not attempt to reconfigure
          */
-        r = ice40_read_register(ICE40_REVISION);
-        if (r == 0xff) {
+        rev = ice40_read_register(ICE40_REVISION);
+        if (rev == 0xff) {
           printk(KERN_WARNING LOG_TAG
                  "WARNING: "
                  "Probable deconfiguration of FPGA, reconfiguring ...\n");
@@ -1426,14 +1527,14 @@ static int panel_notle_power_on(struct omap_dss_device *dssdev) {
         for (i = 0; i < ARRAY_SIZE(panel_init_regs); ++i) {
           if (panel_init_regs[i].reg == REG_DELAY) {
             if ( notle_version_after(V1_EVT1) ){
-              r = ice40_write_register(ICE40_LCOS, ICE40_LCOS_DISP_ENB);
-              if (r) {
+              status = ice40_write_register(ICE40_LCOS, ICE40_LCOS_DISP_ENB);
+              if (status) {
                 printk(KERN_ERR LOG_TAG "Failed to panel_enable\n");
                 goto err1;
               }
             } else if (panel_data->panel_enable) {
-              r = panel_data->panel_enable();
-              if (r) {
+              status = panel_data->panel_enable();
+              if (status) {
                 printk(KERN_ERR LOG_TAG "Failed to panel_enable\n");
                 goto err1;
               }
@@ -1480,17 +1581,14 @@ static int panel_notle_power_on(struct omap_dss_device *dssdev) {
         /* Load defaults */
         ice40_write_register(ICE40_PIPELINE, ice40_defaults.pipeline);
         ice40_write_register(ICE40_BACKLIGHT, ice40_defaults.backlight);
-        fpga_read_revision();
 
         /* Enable LED backlight if we have nonzero brightness */
         if (led_config.brightness > 0) {
-              int yr, yg, yb;
-              struct led_config white_led = led_config;
+              int rgbmat[4][3];
               msleep(1);
-              led_config_to_linecuts(dssdev, &led_config, &r, &g, &b);
-              white_led.brightness /= 3;
-              led_config_to_linecuts(dssdev, &white_led, &yr, &yg, &yb);
-              ice40_set_backlight(1, r, g, b, yr, yg, yb);
+              rev = fpga_read_revision();
+              led_config_to_linecuts(dssdev, &led_config, rev, rgbmat);
+              ice40_set_backlight(1, rev, rgbmat);
         }
 
         drv_data->enabled = 1;
@@ -1498,7 +1596,7 @@ static int panel_notle_power_on(struct omap_dss_device *dssdev) {
 err1:
         omapdss_dpi_display_disable(dssdev);
 err0:
-        return r;
+        return status;
 }
 
 static void panel_notle_power_off(struct omap_dss_device *dssdev) {
@@ -1521,12 +1619,12 @@ static void panel_notle_power_off(struct omap_dss_device *dssdev) {
 
         /* Disable LED backlight */
         /* Don't change the color mix, just disable the backlight. */
-        if (ice40_set_backlight(0, -1, -1, -1, -1, -1, -1)) {
+        if (ice40_set_backlight(0, 0, NULL)) {
           printk(KERN_ERR LOG_TAG "Failed to disable iCE40 FPGA LED_EN\n");
         }
         /* Save register values so we can restore them when we power on. */
         i = ice40_read_register(ICE40_BACKLIGHT);
-        if (i > 0 && i != 0xff) {
+        if (i >= 0 && i != 0xff) {
           /* if 0xff is an illegal value.  Assume FPGA is in a bad state and do
            * not cache bogus value
            */
