@@ -279,7 +279,7 @@ static int panel_notle_power_on(struct omap_dss_device *dssdev);
 static int ice40_read_register(u8 reg_addr);
 static int ice40_write_register(u8 reg_addr, u8 reg_value);
 static int ice40_set_backlight(int led_en, int rev, int (*rgbmat)[3]);
-static int fpga_read_revision(void);
+static int fpga_read_revision(int do_log);
 static void led_config_to_linecuts(struct omap_dss_device *dssdev,
                                    struct led_config *led,
                                    int rev,
@@ -306,7 +306,7 @@ static ssize_t sysfs_reset(struct notle_drv_data *notle_data,
 }
 
 static ssize_t fpga_revision(struct notle_drv_data *notle_data, char *buf) {
-        int rev = fpga_read_revision();
+        int rev = fpga_read_revision(1);
 
         if (rev > 0) {
           /*
@@ -459,7 +459,7 @@ static ssize_t colormix_store(struct notle_drv_data *notle_data,
 
         if (notle_data->enabled && led_config.brightness) {
               int rgbmat[4][3];
-              const int rev = fpga_read_revision();
+              const int rev = fpga_read_revision(0);
               led_config_to_linecuts(notle_data->dssdev, &led_config,
                                      rev, rgbmat);
               if (ice40_set_backlight(1, rev, rgbmat)) {
@@ -822,7 +822,7 @@ static ssize_t brightness_store(struct notle_drv_data *notle_data,
         if (notle_data->enabled) {
             if (led_config.brightness) {
                 int rgbmat[4][3];
-                const int rev = fpga_read_revision();
+                const int rev = fpga_read_revision(0);
                 led_config_to_linecuts(notle_data->dssdev, &led_config,
                                        rev, rgbmat);
                 if (ice40_set_backlight(1, rev, rgbmat)) {
@@ -1090,11 +1090,6 @@ static void led_config_to_linecuts(struct omap_dss_device *dssdev,
                  red, grn, blu, *red_linecut, *grn_linecut, *blu_linecut,
                  led->brightness, led->red_percent, led->green_percent, led->blue_percent);
         }
-        else
-          printk(KERN_INFO LOG_TAG "Linecuts: %i/%i/%i"
-                 ", Config: %u/%u/%u/%u\n",
-                 red, grn, blu,
-                 led->brightness, led->red_percent, led->green_percent, led->blue_percent);
 
         if (rev > FINAL_LINECUT_BASED_FPGA_REVISION) {
           int i,j;
@@ -1265,7 +1260,7 @@ static int ice40_set_backlight(int led_en, int rev, int (*rgbmat)[3]) {
   return ret;
 }
 
-static int fpga_read_revision(void) {
+static int fpga_read_revision(int do_log) {
         int r, rev = -1;
 
         if ((r = ice40_read_register(ICE40_REVISION)) < 0) {
@@ -1273,7 +1268,7 @@ static int fpga_read_revision(void) {
         }
         rev = r;
 
-        if (rev > 0) {
+        if (rev > 0 && do_log) {
           printk(KERN_INFO LOG_TAG "FPGA Revision: 0x%02x, Notle Version: %i\n",
                  (u8)rev, version);
         }
@@ -1586,7 +1581,7 @@ static int panel_notle_power_on(struct omap_dss_device *dssdev) {
         if (led_config.brightness > 0) {
               int rgbmat[4][3];
               msleep(1);
-              rev = fpga_read_revision();
+              rev = fpga_read_revision(1);
               led_config_to_linecuts(dssdev, &led_config, rev, rgbmat);
               ice40_set_backlight(1, rev, rgbmat);
         }
