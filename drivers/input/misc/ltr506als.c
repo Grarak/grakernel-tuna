@@ -640,7 +640,7 @@ static DECLARE_DELAYED_WORK(irq_workqueue_delayed, ltr506_schedwork_delayed);
 static void ltr506_schedwork_delayed(struct work_struct *work)
 {
 	ltr506_schedwork_poll(work);
-	schedule_delayed_work(&irq_workqueue_delayed, msecs_to_jiffies(poll_rate_in_ms));
+	queue_delayed_work(system_freezable_wq, &irq_workqueue_delayed, msecs_to_jiffies(poll_rate_in_ms));
 }
 
 /* IRQ Handler */
@@ -654,7 +654,7 @@ static irqreturn_t ltr506_irq_handler(int irq, void *data)
 	   context */
 	disable_irq_nosync(ltr506->irq);
 
-	schedule_work(&irq_workqueue);
+	queue_work(system_freezable_wq, &irq_workqueue);
 
 	return IRQ_HANDLED;
 }
@@ -662,7 +662,7 @@ static irqreturn_t ltr506_irq_handler(int irq, void *data)
 static int ltr506_setup_polling(struct ltr506_data *ltr506)
 {
 	// Setup workqueue
-	schedule_delayed_work(&irq_workqueue_delayed, msecs_to_jiffies(poll_rate_in_ms));
+	queue_delayed_work(system_freezable_wq, &irq_workqueue_delayed, msecs_to_jiffies(poll_rate_in_ms));
 	return 0;
 }
 
