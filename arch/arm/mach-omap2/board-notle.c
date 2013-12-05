@@ -2073,6 +2073,10 @@ static int notle_gps_init(void) {
 		goto error;
 	}
 
+	/* GPS is only considered function for V1.5 */
+	gps_elton_platform_data.functional =
+		(NOTLE_VERSION == V1_5_PROTO)?  1 : 0;
+
 	return 0;
 
 error:

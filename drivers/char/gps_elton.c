@@ -29,6 +29,8 @@ struct gps_elton_data_s {
 /* Global structure to hold gps data.  There can only be on driver instance. */
 static struct gps_elton_data_s *gps_elton_data = NULL;
 
+
+
 static ssize_t gps_elton_onoff_show(struct device *dev,
                                     struct device_attribute *attr, char *buf)
 {
@@ -92,10 +94,23 @@ static ssize_t gps_elton_awake_show(struct device *dev,
 		gpio_get_value(gps_elton_data->platform_data->gpio_awake));
 }
 
+static ssize_t gps_elton_functional_show(struct device *dev,
+                                    struct device_attribute *attr, char *buf)
+{
+	struct gps_elton_data_s *gps_elton_data = dev_get_drvdata(dev);
+	unsigned functional = 0;
+
+	if (gps_elton_data && gps_elton_data->platform_data) {
+		functional = gps_elton_data->platform_data->functional;
+	}
+	return snprintf(buf, PAGE_SIZE, "%u\n", functional);
+}
+
 static struct device_attribute common_attrs[] = {
 	__ATTR(onoff, 0666, gps_elton_onoff_show, gps_elton_onoff_store),
 	__ATTR(reset, 0666, gps_elton_reset_show, gps_elton_reset_store),
 	__ATTR(awake, 0666, gps_elton_awake_show, NULL),
+	__ATTR(functional, 0666, gps_elton_functional_show, NULL),
 };
 
 static int gps_elton_suspend(struct platform_device *pdev, pm_message_t state) {
@@ -114,7 +129,7 @@ static int gps_elton_resume(struct platform_device *pdev) {
 
 static int gps_elton_probe(struct platform_device *pdev) {
 	int rc = 0;
-	int attr_count, count;
+	int attr_count;
 
 	/* There can only be one elton driver instance. */
 	if (gps_elton_data) {
