@@ -330,7 +330,7 @@ int ion_phys(struct ion_client *client, struct ion_handle *handle,
 	buffer = handle->buffer;
 
 	if (!buffer->heap->ops->phys) {
-		pr_err("%s: ion_phys is not implemented by this heap.\n",
+		pr_debug("%s: ion_phys is not implemented by this heap.\n",
 		       __func__);
 		mutex_unlock(&client->lock);
 		return -ENODEV;
