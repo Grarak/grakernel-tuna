@@ -14,6 +14,7 @@
 #include <linux/gpio.h>
 #include <linux/slab.h>
 #include <linux/timer.h>
+#include <linux/module.h>
 
 #define GPS_ELTON_DRVNAME "gps_elton"
 
