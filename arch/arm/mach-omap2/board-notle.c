@@ -60,11 +60,6 @@
 #include <linux/regulator/fixed.h>
 #include <linux/regulator/machine.h>
 
-/* Synaptics touchpad driver. */
-#if defined(CONFIG_RMI4_BUS)
-#include <linux/rmi.h>
-#endif
-
 #include <mach/hardware.h>
 #include "common.h"
 
@@ -1422,96 +1417,6 @@ static struct twl4030_platform_data notle_twldata = {
 	.madc           = &notle_gpadc_data,
 };
 
-#ifdef CONFIG_RMI4_BUS
-struct notle_gpio_data_s {
-	int gpio_num;
-	const char *name;
-};
-
-// Need to dynamically set gpio_num based on board type
-static struct notle_gpio_data_s notle_touchpad_gpio_data = {
-	.name = "touchpad",
-};
-
-static int synaptics_touchpad_gpio_setup(void *gpio_data, bool configure)
-{
-	int retval = 0;
-	struct notle_gpio_data_s *data = gpio_data;
-
-	if (configure) {
-		/* Enable the interrupt */
-		enable_irq(gpio_to_irq(data->gpio_num));
-		printk(KERN_INFO "%s Callback to setup touchpad gpio %d %s\n",
-		       __func__, data->gpio_num, data->name);
-	} else {
-		pr_warn("%s: No way to deconfigure gpio %d.",
-		        __func__, data->gpio_num);
-	}
-	return retval;
-}
-
-static struct rmi_f11_sensor_data rmi_device_platform_data_f11 = {
-	.axis_align = {
-		.swap_axes = false,
-		.flip_x = false,
-		.flip_y = true,
-
-		.clip_X_low = 0,
-		.clip_Y_low = 0,
-		.clip_X_high = 0,
-		.clip_Y_high = 0,
-
-		.offset_X = 0,
-		.offset_Y = 0,
-		.rel_report_enabled = 0,
-		.delta_x_threshold = 2,
-		.delta_y_threshold = 2,
-	},
-
-	.virtual_buttons = {
-		.buttons = 0,
-		.map = NULL,
-	},
-	/* We are using touchpad type A protocol. */
-	.type_a = 1,
-};
-
-static struct rmi_device_platform_data synaptics_platformdata = {
-	.driver_name = "rmi",
-	.sensor_name = "tm2240",
-
-	.attn_polarity = RMI_ATTN_ACTIVE_LOW,
-	.level_triggered = true,
-	.gpio_data = &notle_touchpad_gpio_data,
-	.gpio_config = synaptics_touchpad_gpio_setup,
-
-	.reset_delay_ms = 100,
-
-	.f11_sensor_data = &rmi_device_platform_data_f11,
-	.f11_sensor_count = 1,
-
-	/* function handler pdata */
-	.power_management = {
-		.nosleep = RMI_F01_NOSLEEP_OFF,
-		.wakeup_threshold = 0,
-		.doze_holdoff = 0,
-		.doze_interval = 0,
-	},
-
-#ifdef CONFIG_RMI4_FWLIB
-	.firmware_name = "firmware_name",
-#endif
-#ifdef  CONFIG_PM
-	.pm_data = NULL,
-	.pre_suspend = NULL,
-	.post_suspend = NULL,
-	.pre_resume = NULL,
-	.post_resume = NULL,
-#endif
-};
-
-#endif  /* CONFIG_RMI4_BUS */
-
 // cb0/1 LOW/HIGH is tty; LOW/LOW is float (initial default)
 static struct usb_mux_platform_data usb_mux_platformdata = {
 	// .gpio_cb0 configured in omap_usb_mux_init
@@ -1593,12 +1498,7 @@ static struct i2c_board_info __initdata notle_i2c_1_boardinfo[] = {
 };
 
 static struct i2c_board_info __initdata notle_i2c_3_boardinfo[] = {
-#if defined(CONFIG_RMI4_BUS)
-        {
-                I2C_BOARD_INFO("rmi_i2c", 0x20),
-                .platform_data = &synaptics_platformdata,
-        },
-#endif  /* CONFIG_RMI4_BUS */
+	/* Touchpad handled dynamically in platform driver */
 };
 
 /*
@@ -1788,19 +1688,14 @@ static struct omap_i2c_bus_board_data __initdata notle_i2c_4_bus_pdata;
 static void __init notle_i2c_irq_fixup(void)
 {
     int i;
-    int gpio_mpu, gpio_prox, gpio_touchpad, gpio_blink;
+    int gpio_mpu, gpio_prox, gpio_blink;
     struct i2c_board_info *pinfo;
 
     gpio_prox = notle_get_gpio(GPIO_PROX_INT_INDEX);
     gpio_mpu = notle_get_gpio(GPIO_MPU9000_INT_INDEX);
-    gpio_touchpad = notle_get_gpio(GPIO_TOUCHPAD_INT_N_INDEX);
     gpio_blink = notle_get_gpio(GPIO_BLINK_INT_INDEX);
 
     // Fix up the global device data structures
-
-#ifdef CONFIG_RMI4_BUS
-    synaptics_platformdata.attn_gpio = gpio_touchpad;
-#endif
 
 #ifdef CONFIG_INPUT_LTR506ALS
     notle_ltr506als_data.pfd_gpio_int_no = gpio_prox;
@@ -1808,10 +1703,6 @@ static void __init notle_i2c_irq_fixup(void)
 
 #ifdef CONFIG_INPUT_GLASSHUB
     notle_glasshub_data.gpio_int_no = gpio_blink;
-#endif
-
-#ifdef CONFIG_RMI4_BUS
-    notle_touchpad_gpio_data.gpio_num = gpio_touchpad;
 #endif
 
     // Now fixup the irqs set in the various 2c boardinfo structs
@@ -2081,27 +1972,6 @@ error:
         return r;
 }
 
-static int __init notle_touchpad_init(void) {
-        int r;
-        int gpio_touchpad_int;
-
-        pr_info("%s()+\n", __func__);
-
-        /* Configuration of requested GPIO line */
-        gpio_touchpad_int = notle_get_gpio(GPIO_TOUCHPAD_INT_N_INDEX);
-
-        r = gpio_request_one(gpio_touchpad_int, GPIOF_IN, "touchpad_int_n");
-        if (r) {
-                pr_err("Failed to get touchpad_int_n gpio\n");
-        }
-        /* Allow this interrupt to wake the system */
-        r = irq_set_irq_wake(gpio_to_irq(gpio_touchpad_int), 1);
-        if (r) {
-                pr_err("%s Unable to set irq to wake device\n", __FUNCTION__);
-        }
-        return r;
-}
-
 static int __init notle_imu_init(void) {
         int r;
         int gpio_mpu9000_int_timer, gpio_mpu9000_int;
@@ -2303,11 +2173,6 @@ static void __init notle_init(void)
         err = platform_device_register(&notle_pcb_temp_sensor);
         if (err) {
             pr_err("notle_pcb_temp_sensor registration failed: %d\n", err);
-        }
-
-        err = notle_touchpad_init();
-        if (err) {
-                pr_err("Touchpad initialization failed: %d\n", err);
         }
 
 #ifdef CONFIG_INPUT_GLASSHUB
