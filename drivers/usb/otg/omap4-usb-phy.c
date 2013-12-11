@@ -47,6 +47,8 @@ int omap4_usb_phy_power(struct device *dev, bool on)
 	u32 val;
 	int ret;
 
+	dev_dbg(dev, "%s: on=%d\n", __func__, on);
+
 	if (on) {
 		ret = omap_control_readl(dev, CONTROL_DEV_CONF, &val);
 		if (!ret && (val & PHY_PD)) {

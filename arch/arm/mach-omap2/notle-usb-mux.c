@@ -243,6 +243,9 @@ void notle_hs_jack_detect(struct snd_soc_codec *codec,
 {
 	struct usb_mux_device_info *di = usb_mux_di;
 
+	if (!di)
+		return;
+
 	di->jack = jack;
 	di->report = report;
 	di->connected = HS_JACK_UNKNOWN;

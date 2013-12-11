@@ -28,4 +28,6 @@ static inline int omap_musb_mailbox(enum omap_musb_vbus_id_status status)
 }
 #endif
 
+int musb_register_init_notifier(struct notifier_block *nb);
+
 #endif	/* __MUSB_OMAP_H__ */

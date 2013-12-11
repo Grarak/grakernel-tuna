@@ -59,10 +59,15 @@ int omap_usb2_charger_detect(struct phy_companion *comparator)
 	struct usb_phy  *x = usb_get_phy(USB_PHY_TYPE_USB2);
 	struct omap_usb *phy = phy_to_omapusb(x);
 	int charger = 0;
+	int suspended = phy->is_suspended;
+
+	dev_dbg(phy->dev, "%s: is_suspended=%d\n", __func__, phy->is_suspended);
 
 	omap_usb2_suspend(x, 0);
 	charger = omap_usb_charger_detect(phy->control_dev);
-	omap_usb2_suspend(x, 1);
+
+	if (suspended)
+		omap_usb2_suspend(x, 1);
 
 	return charger;
 }
@@ -114,6 +119,9 @@ static int omap_usb2_suspend(struct usb_phy *x, int suspend)
 {
 	u32		ret;
 	struct omap_usb *phy = phy_to_omapusb(x);
+
+	dev_dbg(phy->dev, "%s: suspend=%d is_suspended=%d\n", __func__,
+			suspend, phy->is_suspended);
 
 	if (suspend && !phy->is_suspended) {
 		omap4_usb_phy_power(phy->control_dev, 0);
