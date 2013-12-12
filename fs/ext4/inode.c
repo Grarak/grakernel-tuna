@@ -3904,6 +3904,23 @@ static int ext4_do_update_inode(handle_t *handle,
 	if (ext4_test_inode_state(inode, EXT4_STATE_NEW))
 		memset(raw_inode, 0, EXT4_SB(inode->i_sb)->s_inode_size);
 
+	if (bh->b_data == NULL) {
+		pr_err("Unexpected condition occured in ext4 where b_data=NULL (%s:%d)\n",__func__, __LINE__);
+		pr_err("b_state            :%08x \n", bh->b_state);
+		pr_err("b_this_page        :%p \n", bh->b_this_page);
+		pr_err("b_page             :%p \n", bh->b_page);
+		pr_err("b_blocknr          :%08x \n", bh->b_blocknr);
+		pr_err("b_size             :%08x \n", bh->b_size);
+		pr_err("b_data             :%p \n", bh->b_data);
+		pr_err("b_bdev             :%p \n", bh->b_bdev);
+		pr_err("b_end_io           :%p \n", bh->b_end_io);
+		pr_err("b_private          :%p \n", bh->b_private);
+		pr_err("b_assoc_buffers    :%p \n", bh->b_assoc_buffers);
+		pr_err("b_assoc_map        :%p \n", bh->b_assoc_map);
+		pr_err("b_count            :%08x \n", bh->b_count);
+		return -ENOMEM;
+	}
+
 	ext4_get_inode_flags(ei);
 	raw_inode->i_mode = cpu_to_le16(inode->i_mode);
 	if (!(test_opt(inode->i_sb, NO_UID32))) {
