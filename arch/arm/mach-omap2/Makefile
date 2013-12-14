@@ -280,7 +280,6 @@ obj-$(CONFIG_MACH_OMAP4_PANDA)		+= board-omap4panda.o
 
 obj-$(CONFIG_MACH_NOTLE)		+= board-notle.o \
 					   board-notle-bluetooth.o \
-					   board-notle-touchpad.o \
 					   board-notle-wifi.o \
 					   board-notle-io.o \
 					   hsmmc.o \
