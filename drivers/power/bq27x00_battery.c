@@ -1451,7 +1451,7 @@ static int dump_subclass(struct bq27x00_device_info *di, u8 subclass, size_t len
 
 static int bq27x00_dump_partial_dataflash(struct bq27x00_device_info *di)
 {
-	int ret;
+	int ret = 0;
 	struct timespec ts;
 
 	printk("bq27x00: fw version 0x%04x; df version 0x%04x\n",
