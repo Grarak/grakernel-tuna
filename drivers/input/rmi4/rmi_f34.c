@@ -869,7 +869,7 @@ static ssize_t rmi_fn_34_data_write(struct file *data_file,
 	return count;
 }
 
-static __devinit int f34_probe(struct device *dev)
+static int f34_probe(struct device *dev)
 {
 	struct rmi_function_container *fc;
 

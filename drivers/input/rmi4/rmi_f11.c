@@ -3187,7 +3187,7 @@ static struct rmi_function_handler function_handler = {
 #endif  /* CONFIG_PM */
 };
 
-static __devinit int f11_probe(struct device *dev)
+static int f11_probe(struct device *dev)
 {
 	struct rmi_function_container *fc;
 

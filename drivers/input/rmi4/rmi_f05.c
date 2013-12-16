@@ -1078,7 +1078,7 @@ static int f05_remove_device(struct device *dev)
 	return rmi_f05_remove(fc);
 }
 
-static __devinit int f05_probe(struct device *dev)
+static int f05_probe(struct device *dev)
 {
 	struct rmi_function_container *fc;
 

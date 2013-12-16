@@ -318,7 +318,7 @@ static struct rmi_function_handler function_handler = {
 	.attention = rmi_f09_attention,
 };
 
-static __devinit int f09_probe(struct device *dev)
+static int f09_probe(struct device *dev)
 {
 	struct rmi_function_container *fc;
 

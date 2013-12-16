@@ -97,11 +97,11 @@ static struct usb_mux_device_info *usb_mux_di;
  * fastboot if factory cable is plugged in.  If it is
  * set then don't reboot.
  */
-static bool __initdata notle_factorycable_bootmode = false;
+static bool notle_factorycable_bootmode = false;
 #ifdef CONFIG_FIQ_DEBUGGER_CONSOLE_DEFAULT_ENABLE
-static bool __initdata tty_priority = true;
+static bool tty_priority = true;
 #else
-static bool __initdata tty_priority = false;
+static bool tty_priority = false;
 #endif
 
 /* forward decl prototypes */
