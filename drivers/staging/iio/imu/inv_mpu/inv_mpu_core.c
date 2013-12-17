@@ -2073,7 +2073,8 @@ static int inv_mpu_suspend(struct device *dev)
 }
 
 static const struct dev_pm_ops inv_mpu_pmops = {
-	SET_SYSTEM_SLEEP_PM_OPS(inv_mpu_suspend, inv_mpu_resume)
+	.suspend_noirq = inv_mpu_suspend,
+	.resume_noirq = inv_mpu_resume,
 };
 #define INV_MPU_PMOPS (&inv_mpu_pmops)
 #else
