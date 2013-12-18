@@ -1870,7 +1870,7 @@ static void rmi_f11_finger_handler(struct f11_data *f11,
 
 		if (finger_state == F11_RESERVED) {
 			dev_err(&sensor->fc->dev, "%s: Invalid finger"
-			        " state[%d]:0x%02x.", __func__, i,
+			        " state[%d]:0x%02x\n", __func__, i,
 			        finger_state);
 			continue;
 		} else if ((finger_state == F11_PRESENT) ||
@@ -2610,7 +2610,7 @@ static void f11_set_abs_params(struct rmi_function_container *fc, int index)
 	else
 		y_max = device_y_max;
 
-	dev_dbg(&fc->dev, "Set ranges X=[%d..%d] Y=[%d..%d].",
+	dev_dbg(&fc->dev, "Set ranges X=[%d..%d] Y=[%d..%d].\n",
 			x_min, x_max, y_min, y_max);
 
 	input_set_abs_params(input, ABS_MT_PRESSURE, 0,
@@ -3003,7 +3003,7 @@ static int rmi_f11_create_sysfs(struct rmi_function_container *fc)
 		if (sysfs_create_file
 		    (&fc->dev.kobj, &attrs[attr_count].attr) < 0) {
 			dev_err(&fc->dev,
-				"Failed to create sysfs file for %s.",
+				"Failed to create sysfs file for %s.\n",
 				attrs[attr_count].attr.name);
 			rc = -ENODEV;
 			goto err_remove_sysfs;
@@ -3017,7 +3017,7 @@ static int rmi_f11_create_sysfs(struct rmi_function_container *fc)
 		if (sysfs_create_group(&fc->dev.kobj,
 			&attrs_control29_30) < 0) {
 			dev_err(&fc->dev,
-				"Failed to create query sysfs files.");
+				"Failed to create query sysfs files.\n");
 			return -ENODEV;
 		}
 	}
@@ -3110,7 +3110,7 @@ static int rmi_f11_resume(struct rmi_function_container *fc)
 
 	int retval = 0;
 	data->goog.early_suspended = 0;
-	dev_info(&fc->dev, "%s Late resumed touchpad", __FUNCTION__);
+	dev_info(&fc->dev, "%s Late resumed touchpad\n", __FUNCTION__);
 
 	/* NOTE(GOOG) Begin original resume functionality.  In our case we do not
 	 * enable the rezero dunctionality so we simply return. */
@@ -3123,7 +3123,7 @@ static int rmi_f11_resume(struct rmi_function_container *fc)
 	retval = rmi_write_block(rmi_dev, fc->fd.command_base_addr,
 			&commands.reg, sizeof(commands.reg));
 	if (retval < 0) {
-		dev_err(&rmi_dev->dev, "%s: failed to issue rezero command, error = %d.",
+		dev_err(&rmi_dev->dev, "%s: failed to issue rezero command, error = %d.\n",
 			__func__, retval);
 		return retval;
 	}
@@ -3338,7 +3338,7 @@ static ssize_t f11_rezero_store(struct device *dev,
 		retval = rmi_write_block(fc->rmi_dev, fc->fd.command_base_addr,
 				&commands.reg, sizeof(commands.reg));
 		if (retval < 0) {
-			dev_err(dev, "%s: failed to issue rezero command, error = %d.",
+			dev_err(dev, "%s: failed to issue rezero command, error = %d.\n",
 				__func__, retval);
 			return retval;
 		}
