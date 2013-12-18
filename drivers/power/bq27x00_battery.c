@@ -815,6 +815,8 @@ static int bq27x00_battery_status(struct bq27x00_device_info *di,
 {
 	int status;
 
+	di->cache.flags = bq27x00_read(di, BQ27x00_REG_FLAGS, false);
+
 	if (di->chip == BQ27500) {
 		if (di->cache.flags & BQ27500_FLAG_FC)
 			status = POWER_SUPPLY_STATUS_FULL;
