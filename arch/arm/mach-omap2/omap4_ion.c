@@ -18,7 +18,7 @@
 #include "omap4_ion.h"
 
 static struct ion_platform_data omap4_ion_data = {
-	.nr = 5,
+	.nr = 6,
 	.heaps = {
 		{
 			.type = ION_HEAP_TYPE_CARVEOUT,
@@ -53,6 +53,11 @@ static struct ion_platform_data omap4_ion_data = {
 			.id = OMAP_ION_HEAP_TILER_RESERVATION,
 			.name = "tiler_reservation",
 		},
+		{
+			.type = OMAP_ION_HEAP_TYPE_MULTIMEDIA_CARVEOUT,
+			.id = OMAP_ION_HEAP_MULTIMEDIA,
+			.name = "multimedia_carveout"
+		}
 	},
 };
 
@@ -80,7 +85,8 @@ void __init omap4_ion_init(void)
 
 	for (i = 0; i < omap4_ion_data.nr; i++)
 		if (omap4_ion_data.heaps[i].type == ION_HEAP_TYPE_CARVEOUT ||
-		    omap4_ion_data.heaps[i].type == OMAP_ION_HEAP_TYPE_TILER) {
+		    omap4_ion_data.heaps[i].type == OMAP_ION_HEAP_TYPE_TILER ||
+		    omap4_ion_data.heaps[i].type == OMAP_ION_HEAP_TYPE_MULTIMEDIA_CARVEOUT) {
 			ret = memblock_remove(omap4_ion_data.heaps[i].base,
 					      omap4_ion_data.heaps[i].size);
 			if (ret)

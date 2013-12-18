@@ -2370,6 +2370,7 @@ static void __init notle_reserve(void)
 #endif
     size_t ion_heap_tiler_size = OMAP4_ION_HEAP_TILER_SIZE;
     size_t ion_heap_nonsecure_tiler_size = OMAP4_ION_HEAP_NONSECURE_TILER_SIZE;
+    size_t ion_heap_multimedia_size = SZ_1M * (((ram_size >> 20) > 1024) ? 320 : 180);
 
     // Compute Carve-out addresses
     phys_addr_t smc_addr = DEFAULT_PHYS_ADDR_OFFSET + ram_size - smc_size;
@@ -2378,6 +2379,7 @@ static void __init notle_reserve(void)
     phys_addr_t dsp_heap_addr = ipu_heap_addr - dsp_heap_size;
     phys_addr_t ion_heap_tiler_addr = dsp_heap_addr - ion_heap_tiler_size;
     phys_addr_t ion_heap_nonsecure_tiler_addr = ion_heap_tiler_addr - ion_heap_nonsecure_tiler_size;
+    phys_addr_t ion_heap_multimedia_addr = ion_heap_nonsecure_tiler_addr - ion_heap_multimedia_size;
     // Get the ION Platform Data Structure and Update the info.
     struct ion_platform_data * ion_platform_data_ptr = omap4_ion_get_ion_data_ptr();
 
@@ -2405,6 +2407,7 @@ static void __init notle_reserve(void)
 #endif
     printk("Tiler Addr             : 0x%08x Size: (%08x) \n", ion_heap_tiler_addr, ion_heap_tiler_size);
     printk("Tiler non-secure addr  : 0x%08x Size: (%08x) \n", ion_heap_nonsecure_tiler_addr, ion_heap_nonsecure_tiler_size);
+    printk("MultiMedia Heap addr   : 0x%08x Size: (%08x) \n", ion_heap_multimedia_addr, ion_heap_multimedia_size);
     printk("-------------------------------------\n");
 
 #ifdef CONFIG_ION_OMAP
@@ -2424,6 +2427,9 @@ static void __init notle_reserve(void)
             h->base = ion_heap_tiler_addr;
             h->size = ion_heap_tiler_size;
             break;
+        case OMAP_ION_HEAP_MULTIMEDIA:
+            h->base = ion_heap_multimedia_addr;
+            h->size = ion_heap_multimedia_size;
         default:
             break;
         }
