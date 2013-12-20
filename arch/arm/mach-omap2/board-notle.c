@@ -1740,6 +1740,7 @@ static struct i2c_board_info __initdata notle_i2c_4_boardinfo[] = {
         },
         {
                 I2C_BOARD_INFO("mpu9150", 0x68),
+                .flags = I2C_CLIENT_WAKE,
                 .platform_data = &mpu9150_notle_data,
         },
 #ifdef CONFIG_INPUT_LTR506ALS
@@ -1757,6 +1758,7 @@ static struct i2c_board_info __initdata notle_i2c_4_boardinfo[] = {
 #ifdef CONFIG_INPUT_GLASSHUB
         {
                 I2C_BOARD_INFO("glasshub", 0x35),
+                .flags = I2C_CLIENT_WAKE,
                 .platform_data = &notle_glasshub_data,
         },
 #endif
@@ -2270,13 +2272,13 @@ static void __init notle_init(void)
         mmc[2].mmc = 0;
 #endif
 
+        notle_i2c_init();
+        omap4_register_ion();
+
         err = notle_imu_init();
         if (err) {
                 pr_err("IMU initialization failed: %d\n", err);
         }
-        notle_i2c_init();
-        omap4_register_ion();
-
 
         err = notle_wlan_init();
         if (err) {
