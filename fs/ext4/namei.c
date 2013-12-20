@@ -585,11 +585,8 @@ static int htree_dirblock_to_tree(struct file *dir_file,
 		if (ext4_check_dir_entry(dir, NULL, de, bh,
 				(block<<EXT4_BLOCK_SIZE_BITS(dir->i_sb))
 					 + ((char *)de - bh->b_data))) {
-			/* On error, skip the f_pos to the next block. */
-			dir_file->f_pos = (dir_file->f_pos |
-					(dir->i_sb->s_blocksize - 1)) + 1;
-			brelse(bh);
-			return count;
+			/* silently ignore the rest of the block */
+			break;
 		}
 		ext4fs_dirhash(de->name, de->name_len, hinfo);
 		if ((hinfo->hash < start_hash) ||
@@ -813,22 +810,6 @@ static inline int search_dirblock(struct buffer_head *bh,
 	int namelen = d_name->len;
 
 	de = (struct ext4_dir_entry_2 *) bh->b_data;
-	if (de == NULL) {
-		pr_err("Unexpected condition occured in ext4 where b_data=NULL (%s:%d)\n",__func__, __LINE__);
-		pr_err("b_state            :%08x \n", bh->b_state);
-		pr_err("b_this_page        :%p \n", bh->b_this_page);
-		pr_err("b_page             :%p \n", bh->b_page);
-		pr_err("b_blocknr          :%08x \n", bh->b_blocknr);
-		pr_err("b_size             :%08x \n", bh->b_size);
-		pr_err("b_data             :%p \n", bh->b_data);
-		pr_err("b_bdev             :%p \n", bh->b_bdev);
-		pr_err("b_end_io           :%p \n", bh->b_end_io);
-		pr_err("b_private          :%p \n", bh->b_private);
-		pr_err("b_assoc_buffers    :%p \n", bh->b_assoc_buffers);
-		pr_err("b_assoc_map        :%p \n", bh->b_assoc_map);
-		pr_err("b_count            :%08x \n", bh->b_count);
-		return -1;
-	}
 
 	dlimit = bh->b_data + dir->i_sb->s_blocksize;
 	while ((char *) de < dlimit) {
@@ -2074,7 +2055,8 @@ int ext4_orphan_del(handle_t *handle, struct inode *inode)
 	int err = 0;
 
 	/* ext4_handle_valid() assumes a valid handle_t pointer */
-	if (handle && !ext4_handle_valid(handle))
+	if (handle && !ext4_handle_valid(handle) &&
+	    !(EXT4_SB(inode->i_sb)->s_mount_state & EXT4_ORPHAN_FS))
 		return 0;
 
 	mutex_lock(&EXT4_SB(inode->i_sb)->s_orphan_lock);

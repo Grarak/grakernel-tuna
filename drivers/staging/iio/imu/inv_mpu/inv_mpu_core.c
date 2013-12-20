@@ -2056,9 +2056,9 @@ static int inv_mpu_resume(struct device *dev)
 {
 	struct inv_mpu_iio_s *st =
 			iio_priv(i2c_get_clientdata(to_i2c_client(dev)));
-
+#ifndef CONFIG_MACH_NOTLE
 	mutex_unlock(&st->suspend_resume_lock);
-
+#endif
 	return 0;
 }
 
@@ -2067,8 +2067,9 @@ static int inv_mpu_suspend(struct device *dev)
 	struct inv_mpu_iio_s *st =
 			iio_priv(i2c_get_clientdata(to_i2c_client(dev)));
 
+#ifndef CONFIG_MACH_NOTLE
 	mutex_lock(&st->suspend_resume_lock);
-
+#endif
 	return 0;
 }
 
