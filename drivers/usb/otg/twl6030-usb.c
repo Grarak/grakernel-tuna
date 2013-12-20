@@ -338,6 +338,8 @@ static void twl6030_hnd_detect(struct work_struct *work)
 	case TWL6030_USB_EVENT_OTG_GND:
 		dev_dbg(twl->dev, "Supply type is already selected!\n");
 		break;
+	case TWL6030_USB_EVENT_COUNT:
+		break;
 	}
 
 	if (ret)

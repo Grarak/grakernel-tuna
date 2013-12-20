@@ -813,22 +813,6 @@ static inline int search_dirblock(struct buffer_head *bh,
 	int namelen = d_name->len;
 
 	de = (struct ext4_dir_entry_2 *) bh->b_data;
-	if (de == NULL) {
-		pr_err("Unexpected condition occured in ext4 where b_data=NULL (%s:%d)\n",__func__, __LINE__);
-		pr_err("b_state            :%08x \n", bh->b_state);
-		pr_err("b_this_page        :%p \n", bh->b_this_page);
-		pr_err("b_page             :%p \n", bh->b_page);
-		pr_err("b_blocknr          :%08x \n", bh->b_blocknr);
-		pr_err("b_size             :%08x \n", bh->b_size);
-		pr_err("b_data             :%p \n", bh->b_data);
-		pr_err("b_bdev             :%p \n", bh->b_bdev);
-		pr_err("b_end_io           :%p \n", bh->b_end_io);
-		pr_err("b_private          :%p \n", bh->b_private);
-		pr_err("b_assoc_buffers    :%p \n", bh->b_assoc_buffers);
-		pr_err("b_assoc_map        :%p \n", bh->b_assoc_map);
-		pr_err("b_count            :%08x \n", bh->b_count);
-		return -1;
-	}
 
 	dlimit = bh->b_data + dir->i_sb->s_blocksize;
 	while ((char *) de < dlimit) {
