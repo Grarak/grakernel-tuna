@@ -46,6 +46,7 @@
 #include <linux/pm_runtime.h>
 #include <plat/omap_device.h>
 #include <linux/pm_qos.h>
+#include <linux/switch.h>
 
 /* I2C controller revisions */
 #define OMAP_I2C_OMAP1_REV_2		0x20
@@ -210,6 +211,7 @@ struct omap_i2c_dev {
 	bool			suspended;	/* if true - I2C device
 						   suspended and can't be
 						   accessible*/
+	struct		switch_dev sdev;
 };
 
 static const u8 reg_map_ip_v1[] = {
@@ -582,7 +584,7 @@ static int omap_i2c_xfer_msg(struct i2c_adapter *adap,
 			if (time_after(jiffies, delay)) {
 				dev_err(dev->dev, "controller timed out "
 				"waiting for start condition to finish\n");
-				return -ETIMEDOUT;
+				goto controller_timedout;
 			}
 			cpu_relax();
 		}
@@ -602,11 +604,13 @@ static int omap_i2c_xfer_msg(struct i2c_adapter *adap,
 	if (timeout == 0) {
 		dev_err(dev->dev, "controller timed out\n");
 		omap_i2c_init(dev);
-		return -ETIMEDOUT;
+		goto controller_timedout;
 	}
 
-	if (likely(!dev->cmd_err))
+	if (likely(!dev->cmd_err)) {
+		switch_set_state(&dev->sdev, 0);
 		return 0;
+	}
 
 	/* We have an error */
 	if (dev->cmd_err & (OMAP_I2C_STAT_AL | OMAP_I2C_STAT_ROVR |
@@ -626,6 +630,12 @@ static int omap_i2c_xfer_msg(struct i2c_adapter *adap,
 		return -EREMOTEIO;
 	}
 	return -EIO;
+
+controller_timedout:
+	dev_warn(dev->dev, "detected i2c controller timeout, pulsing i2c error switch\n");
+	switch_set_state(&dev->sdev, 0);
+	switch_set_state(&dev->sdev, 1);
+	return -ETIMEDOUT;
 }
 
 
@@ -1059,7 +1069,7 @@ omap_i2c_probe(struct platform_device *pdev)
 
 	dev = devm_kzalloc(&pdev->dev, sizeof(struct omap_i2c_dev), GFP_KERNEL);
 	if (!dev) {
-		dev_err(&pdev->dev, "Menory allocation failed\n");
+		dev_err(&pdev->dev, "Memory allocation failed\n");
 		return -ENOMEM;
 	}
 
@@ -1184,6 +1194,13 @@ omap_i2c_probe(struct platform_device *pdev)
 
 	pm_runtime_put(dev->dev);
 
+	/* create a switch device to notify userspace in case i2c error occurs */
+	dev->sdev.name = kasprintf(GFP_KERNEL, "%s.%d-%s", "i2c", pdev->id, "error");
+	r = switch_dev_register(&dev->sdev);
+	if (r) {
+		dev_err(dev->dev, "error registering switch device: %d\n", r);
+	}
+
 	return 0;
 
 err_free_irq:
@@ -1215,6 +1232,7 @@ static int __devexit omap_i2c_remove(struct platform_device *pdev)
 	pm_runtime_put(&pdev->dev);
 	pm_runtime_disable(&pdev->dev);
 	pm_qos_remove_request(&dev->pm_qos_request);
+	switch_dev_unregister(&dev->sdev);
 	return 0;
 }
 
