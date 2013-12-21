@@ -28,6 +28,7 @@
 #include <linux/i2c/bq2415x.h>
 #include <linux/wakelock.h>
 #include <linux/usb/otg.h>
+#include <linux/usb/omap_usb.h>
 #include <asm/div64.h>
 #include <linux/reboot.h>
 
@@ -50,8 +51,6 @@
 #define CHARGERUSB_CTRLLIMIT2             0x10
 #define ANTICOLLAPSE_CTRL1                0x11
 #define ANTICOLLAPSE_CTRL2                0x12
-#define LED_PWM_CTRL1                     0x14
-#define LED_PWM_CTRL2                     0x15
 
 #define FG_REG_00                         0x00
 #define FG_REG_01                         0x01
@@ -217,409 +216,152 @@
 #define STS_HW_CONDITIONS                 0x21
 #define STS_USB_ID                        (1 << 2)    /* Level status of USB ID */
 
-enum led_mode {
-	LED_PWM_AUTO = 0x0,
-	LED_PWM_ON = 0x1,
-	LED_PWM_OFF= 0x2,
+/*
+ * The system can be in one of three major states that can
+ * tranisition to each other on certain events.
+ *
+ * Unplugged: The device is not connected to external power.
+ *    In this state the battery will discharge due to load.
+ *    This state is entered whenever external power is
+ *    removed.
+ *
+ * Charging: The device is connected to exernal power and
+ *    the battery is actively being charged. The battery
+ *    will only discharge if the system load exceeds the
+ *    charger current capability.
+ *
+ * Not Charging: The device is connected to external power
+ *    but the battery is not actively being charged. There
+ *    are several conditions that result in this state:
+ *    battery full, temperature lockout, invalid/poor
+ *    charge source, and software disable.
+ */
+enum charger_state {
+	CHARGER_STATE_UNPLUGGED = 0,
+	CHARGER_STATE_CHARGING,
+	CHARGER_STATE_NOT_CHARGING,
 };
 
-#if defined(CONFIG_MACH_NOTLE)
-extern int notle_version_support_battery_temperature(void);
-#endif
-
-/* sign extension needs a little care */
-static __inline int sign_extend(int n, int num_bits)
-{
-	int shift = (int)(sizeof(int) * 8 - num_bits);
-	return (n << shift) >> shift;
-}
-
-/* Ptr to thermistor table */
-static struct wake_lock usb_wake_lock;
-
-#define STATE_BATTERY                     0    /* no wall power, charging disabled */
-#define STATE_FAULT                       1    /* charging off due to fault condition */
-#define STATE_FULL                        2    /* wall power but battery is charged */
-#define STATE_USB                         3    /* 500mA wall power, charging enabled */
-#define STATE_AC                          4    /* 1000mA wall power, charging enabled */
-
-static const char *twl6030_state[] = {
-	"BATTERY", "FAULT", "FULL", "USB", "AC"
+static const char *state_strings[] = {
+	"UNPLUGGED",
+	"CHARGING",
+	"NOT CHARGING",
 };
 
-#define is_powered(di) (di->state > STATE_FAULT)
-#define is_charging(di) (di->state > STATE_FULL)
+#define state_to_str(state) (state_strings[(state)])
 
-#define LED_STATE_NONE                   -1
-#define LED_STATE_OFF                     0
-#define LED_STATE_ON                      1
-#define LED_STATE_RAMP                    2
-#define LED_STATE_OSCILLATE               3
-#define LED_UPDATE_RATE_MS               66
-#define LED_RAMPUP_TIME_MS             1280
+#define is_powered(di) ((di)->state != CHARGER_STATE_UNPLUGGED)
+#define is_charging(di) ((di)->state == CHARGER_STATE_CHARGING)
+#define is_otg_enabled(di) ((di)->otg_online)
 
-struct led_state {
-	int state;          // current state
-	int next;           // state after completing current state
+/* thermal limits for battery in tenths of a degree centigrade */
+#define CHARGER_LOW_TEMP_LIMIT (100)
+#define CHARGER_HIGH_TEMP_LIMIT (450)
+#define CHARGER_LOW_TEMP_CRITICAL (-100)
+#define CHARGER_HIGH_TEMP_CRITICAL (600)
 
-	enum led_mode mode; // cached led mode
-	int cur;            // current value
-	int target;         // target value
-	int base;           // bottom/top of oscillation
+#define CHARGER_TAPER_CURRENT (20000)
 
-	long rate;          // rate to change value
+struct twl6030_led_state;
 
-	int led_low;        // configured low led level
-	int led_high;       // configured high led level
-	int led_step;       // step to increment or decrement per timer tick
-};
-
-struct twl6030_charger_device_info {
+struct charger_info {
 	struct device *dev;
 
-	int voltage_uV;
-	int current_uA;
-	int current_avg_uA;
-	int temperature_cC;
-	int bat_health;
-	int state;
-	int vbus_online;
+	enum charger_state state;
+	enum power_supply_type charger_type;
 
+	/* battery state */
+	int gg_status;
+	int gg_capacity;
+	int gg_raw_capacity;
+	int gg_voltage_uV;
+	int gg_current_uA;
+	int gg_temperature_cC;
+	int gg_qpassed_mAh;
+
+	/* charger parameters */
 	int current_limit_mA;
-	int temperature_critical;
+	int recharge_capacity;
+
+	int termination_current_mA;
+	int charger_outcurrent_mA;
+	int charger_voltage_mV;
+
+	/* limiting condition flags; protected by mutex */
 	int charge_disabled;
+	int temperature_lockout;
+	int invalid_charger;
+	int battery_full;
 
-	struct led_state led;
-	struct timer_list led_timer;
-	struct work_struct led_work;
+	/* usb state; protected by mutex */
+	int vbus_online;
+	int usb_online;
+	int otg_online;
 
-	unsigned int recharge_capacity;
+	enum power_supply_type charger_supply_type;
+	unsigned long usb_event;
+
+	/* shutdown conditions */
+	int temperature_critical_count;
+
+	/* charge control irq state */
+	u8 charge_control_state;
+
+	/* power led state */
+	struct twl6030_led_state *led;
 
 	unsigned long monitor_interval_jiffies;
-
-	u8 usb_online;
-
-	u8 watchdog_duration;
-	unsigned int min_vbus;
-
-	struct twl4030_charger_platform_data *platform_data;
-
-	unsigned int charger_incurrent_mA;
-	unsigned int charger_outcurrent_mA;
-	unsigned int charger_voltage_mV;
-	unsigned int max_bat_voltage_mV;
-	unsigned int max_charger_current_mA;
-	unsigned long usb_max_power;
-	unsigned long usb_event;
+	int watchdog_duration;
 
 	struct power_supply usb;
 	struct power_supply *battery;
 
-	struct usb_phy *phy;
-	struct notifier_block nb;
+	struct notifier_block notifier;
 
-	struct work_struct charge_control_work;
-	struct work_struct charge_fault_work;
-	struct delayed_work monitor_work;
-
+	struct timer_list timer;
+	struct work_struct work;
 	struct workqueue_struct *wq;
+
+	struct wake_lock wake_lock;
+	struct mutex mutex;
 };
 
-/* Intensity curve: 255*((x/255)**2) over [0, 255] */
-static const int led_curve[] = {
-	0x00,  0x00,  0x00,  0x00,  0x00,  0x00,  0x00,  0x00,  0x00,  0x00,
-	0x00,  0x00,  0x00,  0x00,  0x00,  0x00,  0x01,  0x01,  0x01,  0x01,
-	0x01,  0x01,  0x01,  0x02,  0x02,  0x02,  0x02,  0x02,  0x03,  0x03,
-	0x03,  0x03,  0x04,  0x04,  0x04,  0x04,  0x05,  0x05,  0x05,  0x05,
-	0x06,  0x06,  0x06,  0x07,  0x07,  0x07,  0x08,  0x08,  0x09,  0x09,
-	0x09,  0x0a,  0x0a,  0x0b,  0x0b,  0x0b,  0x0c,  0x0c,  0x0d,  0x0d,
-	0x0e,  0x0e,  0x0f,  0x0f,  0x10,  0x10,  0x11,  0x11,  0x12,  0x12,
-	0x13,  0x13,  0x14,  0x14,  0x15,  0x16,  0x16,  0x17,  0x17,  0x18,
-	0x19,  0x19,  0x1a,  0x1b,  0x1b,  0x1c,  0x1d,  0x1d,  0x1e,  0x1f,
-	0x1f,  0x20,  0x21,  0x21,  0x22,  0x23,  0x24,  0x24,  0x25,  0x26,
-	0x27,  0x28,  0x28,  0x29,  0x2a,  0x2b,  0x2c,  0x2c,  0x2d,  0x2e,
-	0x2f,  0x30,  0x31,  0x32,  0x32,  0x33,  0x34,  0x35,  0x36,  0x37,
-	0x38,  0x39,  0x3a,  0x3b,  0x3c,  0x3d,  0x3e,  0x3f,  0x40,  0x41,
-	0x42,  0x43,  0x44,  0x45,  0x46,  0x47,  0x48,  0x49,  0x4a,  0x4b,
-	0x4c,  0x4d,  0x4f,  0x50,  0x51,  0x52,  0x53,  0x54,  0x55,  0x57,
-	0x58,  0x59,  0x5a,  0x5b,  0x5d,  0x5e,  0x5f,  0x60,  0x61,  0x63,
-	0x64,  0x65,  0x66,  0x68,  0x69,  0x6a,  0x6c,  0x6d,  0x6e,  0x70,
-	0x71,  0x72,  0x74,  0x75,  0x76,  0x78,  0x79,  0x7a,  0x7c,  0x7d,
-	0x7f,  0x80,  0x81,  0x83,  0x84,  0x86,  0x87,  0x89,  0x8a,  0x8c,
-	0x8d,  0x8f,  0x90,  0x92,  0x93,  0x95,  0x96,  0x98,  0x99,  0x9b,
-	0x9c,  0x9e,  0xa0,  0xa1,  0xa3,  0xa4,  0xa6,  0xa8,  0xa9,  0xab,
-	0xac,  0xae,  0xb0,  0xb1,  0xb3,  0xb5,  0xb6,  0xb8,  0xba,  0xbc,
-	0xbd,  0xbf,  0xc1,  0xc3,  0xc4,  0xc6,  0xc8,  0xca,  0xcb,  0xcd,
-	0xcf,  0xd1,  0xd3,  0xd4,  0xd6,  0xd8,  0xda,  0xdc,  0xde,  0xe0,
-	0xe1,  0xe3,  0xe5,  0xe7,  0xe9,  0xeb,  0xed,  0xef,  0xf1,  0xf3,
-	0xf5,  0xf7,  0xf9,  0xfb,  0xfd,  0xff,
-};
+struct twl6030_led_state *twl6030_init_led_state(struct device *dev);
+void twl6030_eval_led_state(struct twl6030_led_state *di, bool is_powered, bool is_charging);
 
-/* Convert from output curve to linear intensity. Used to convert the
- * initial boot value of the led into the linear state machine space.
- * This inverse table selects the mid-points within ranges of equivalent
- * mappings */
-static const int led_curve_inverse[] = {
-	0x07,  0x13,  0x19,  0x1d,  0x21,  0x25,  0x29,  0x2c,  0x2e,  0x31,
-	0x33,  0x36,  0x38,  0x3a,  0x3c,  0x3e,  0x40,  0x42,  0x44,  0x46,
-	0x48,  0x4a,  0x4b,  0x4d,  0x4f,  0x50,  0x52,  0x53,  0x55,  0x56,
-	0x58,  0x59,  0x5b,  0x5c,  0x5e,  0x5f,  0x60,  0x62,  0x63,  0x64,
-	0x65,  0x67,  0x68,  0x69,  0x6a,  0x6c,  0x6d,  0x6e,  0x6f,  0x70,
-	0x71,  0x73,  0x74,  0x75,  0x76,  0x77,  0x78,  0x79,  0x7a,  0x7b,
-	0x7c,  0x7d,  0x7e,  0x7f,  0x80,  0x81,  0x82,  0x83,  0x84,  0x85,
-	0x86,  0x87,  0x88,  0x89,  0x8a,  0x8b,  0x8c,  0x8d,  0x8d,  0x8e,
-	0x8f,  0x90,  0x91,  0x92,  0x93,  0x94,  0x94,  0x95,  0x96,  0x97,
-	0x98,  0x99,  0x99,  0x9a,  0x9b,  0x9c,  0x9d,  0x9e,  0x9e,  0x9f,
-	0xa0,  0xa1,  0xa2,  0xa2,  0xa3,  0xa4,  0xa5,  0xa5,  0xa6,  0xa7,
-	0xa8,  0xa8,  0xa9,  0xaa,  0xab,  0xab,  0xac,  0xad,  0xae,  0xae,
-	0xaf,  0xb0,  0xb1,  0xb1,  0xb2,  0xb3,  0xb3,  0xb4,  0xb5,  0xb6,
-	0xb6,  0xb7,  0xb8,  0xb8,  0xb9,  0xba,  0xba,  0xbb,  0xbc,  0xbc,
-	0xbd,  0xbe,  0xbe,  0xbf,  0xc0,  0xc0,  0xc1,  0xc2,  0xc2,  0xc3,
-	0xc4,  0xc4,  0xc5,  0xc6,  0xc6,  0xc7,  0xc8,  0xc8,  0xc9,  0xc9,
-	0xca,  0xcb,  0xcb,  0xcc,  0xcd,  0xcd,  0xce,  0xce,  0xcf,  0xd0,
-	0xd0,  0xd1,  0xd2,  0xd2,  0xd3,  0xd3,  0xd4,  0xd5,  0xd5,  0xd6,
-	0xd6,  0xd7,  0xd8,  0xd8,  0xd9,  0xd9,  0xda,  0xda,  0xdb,  0xdc,
-	0xdc,  0xdd,  0xdd,  0xde,  0xde,  0xdf,  0xe0,  0xe0,  0xe1,  0xe1,
-	0xe2,  0xe2,  0xe3,  0xe4,  0xe4,  0xe5,  0xe5,  0xe6,  0xe6,  0xe7,
-	0xe7,  0xe8,  0xe9,  0xe9,  0xea,  0xea,  0xeb,  0xeb,  0xec,  0xec,
-	0xed,  0xed,  0xee,  0xee,  0xef,  0xf0,  0xf0,  0xf1,  0xf1,  0xf2,
-	0xf2,  0xf3,  0xf3,  0xf4,  0xf4,  0xf5,  0xf5,  0xf6,  0xf6,  0xf7,
-	0xf7,  0xf8,  0xf8,  0xf9,  0xf9,  0xfa,  0xfa,  0xfb,  0xfb,  0xfc,
-	0xfc,  0xfd,  0xfd,  0xfe,  0xfe,  0xff,
-};
-
-static bool otg_enabled(struct usb_phy *phy) {
-	return (phy->last_event == USB_EVENT_ID);
+static inline void charger_lock(struct charger_info *di)
+{
+	mutex_lock(&di->mutex);
 }
 
-static int twl6030_get_pwm_level(void)
+static inline void charger_unlock(struct charger_info *di)
 {
-	u8 pwm = 0;
-	twl_i2c_read_u8(TWL6030_MODULE_CHARGER, &pwm, LED_PWM_CTRL1);
-	return led_curve_inverse[pwm];
+	mutex_unlock(&di->mutex);
 }
 
-static void twl6030_set_pwm_level(u8 pwm)
+static inline void charger_update_state(struct charger_info *di)
 {
-	twl_i2c_write_u8(TWL6030_MODULE_CHARGER, led_curve[pwm], LED_PWM_CTRL1);
+	queue_work(di->wq, &di->work);
 }
 
-static int twl6030_get_led_mode(void)
+static void charger_timer(unsigned long data)
 {
-	u8 mode = 0;
-	twl_i2c_read_u8(TWL6030_MODULE_CHARGER, &mode, LED_PWM_CTRL2);
+	struct charger_info *di = (struct charger_info *) data;
 
-	return mode & 0x3;
-}
-
-static void twl6030_set_led_mode(enum led_mode mode)
-{
-	u8 oldval = 0;
-
-	twl_i2c_read_u8(TWL6030_MODULE_CHARGER, &oldval, LED_PWM_CTRL2);
-	oldval = (oldval & 0xfc) | mode;
-	twl_i2c_write_u8(TWL6030_MODULE_CHARGER, oldval, LED_PWM_CTRL2);
-}
-
-static void twl6030_set_led(struct twl6030_charger_device_info *di,
-		enum led_mode mode, int pwm)
-{
-	if (pwm >= 0) {
-		di->led.cur = pwm;
-		twl6030_set_pwm_level(pwm & 0xff);
-	}
-
-	di->led.mode = mode;
-	twl6030_set_led_mode(mode);
-}
-
-static void twl6030_led_timer(unsigned long data)
-{
-	struct twl6030_charger_device_info *di = (struct twl6030_charger_device_info *) data;
-	queue_work(di->wq, &di->led_work);
-}
-
-/*
- * Read the hardware state and setup the led state struct to match.
- */
-static void twl6030_init_led_state(struct twl6030_charger_device_info *di)
-{
-	int pwm, mode;
-
-	pwm = twl6030_get_pwm_level();
-	mode = twl6030_get_led_mode();
-
-	switch (di->led.mode) {
-		case LED_PWM_OFF:
-			di->led.state = LED_STATE_OFF;
-			di->led.cur = pwm;
-			di->led.mode = mode;
-			break;
-
-		case LED_PWM_ON:
-			di->led.state = LED_STATE_ON;
-			di->led.cur = pwm;
-			di->led.mode = mode;
-			break;
-
-		default:
-			// set the state to off, since we don't know if the bootloader left the charger on
-			twl6030_set_led(di, LED_PWM_OFF, pwm);
-			di->led.state = LED_STATE_OFF;
-			break;
-	}
-
-	di->led.next = LED_STATE_NONE;
-	di->led.rate = 0;
-	di->led.target = di->led.cur;
-	di->led.base = 0;
-	di->led.led_low = 0x00;
-	di->led.led_high = 0xff;
-	di->led.led_step = (di->led.led_high - di->led.led_low) / (LED_RAMPUP_TIME_MS / LED_UPDATE_RATE_MS);
-
-	setup_timer(&di->led_timer, twl6030_led_timer, (unsigned long) di);
-}
-
-static int twl6030_led_add(struct twl6030_charger_device_info *di, int inc)
-{
-	int value = di->led.cur + inc;
-
-	/* if the increment crosses the target, clip to target */
-	if ((value < di->led.target && di->led.cur > di->led.target) ||
-			(value > di->led.target && di->led.cur < di->led.target)) {
-		value = di->led.target;
-	}
-
-	return value;
-}
-
-static void twl6030_led_run(struct twl6030_charger_device_info *di)
-{
-	switch (di->led.state) {
-		case LED_STATE_OFF:
-			twl6030_set_led(di, LED_PWM_OFF, -1);
-
-			if (di->led.next > LED_STATE_NONE) {
-				di->led.state = di->led.next;
-				di->led.next = LED_STATE_NONE;
-				mod_timer(&di->led_timer, msecs_to_jiffies(di->led.rate) + jiffies);
-			}
-			break;
-
-		case LED_STATE_ON:
-			twl6030_set_led(di, LED_PWM_ON, di->led.cur);
-
-			if (di->led.next > LED_STATE_NONE) {
-				di->led.state = di->led.next;
-				di->led.next = LED_STATE_NONE;
-				mod_timer(&di->led_timer, msecs_to_jiffies(di->led.rate) + jiffies);
-			}
-			break;
-
-		case LED_STATE_RAMP:
-			if (di->led.mode != LED_PWM_ON)
-				twl6030_set_led(di, LED_PWM_ON, 0);
-
-			if (di->led.cur < di->led.target) {
-				di->led.cur = twl6030_led_add(di, di->led.led_step);
-				twl6030_set_pwm_level(di->led.cur);
-			} else if (di->led.cur > di->led.target) {
-				di->led.cur = twl6030_led_add(di, -di->led.led_step);
-				twl6030_set_pwm_level(di->led.cur);
-			}
-
-			if (di->led.cur == di->led.target) {
-				di->led.state = di->led.next;
-				di->led.next = LED_STATE_NONE;
-			}
-
-			mod_timer(&di->led_timer, msecs_to_jiffies(di->led.rate) + jiffies);
-			break;
-
-		case LED_STATE_OSCILLATE:
-			if (di->led.mode != LED_PWM_ON)
-				twl6030_set_led(di, LED_PWM_ON, 0);
-
-			if (di->led.cur < di->led.target) {
-				di->led.cur = twl6030_led_add(di, di->led.led_step);
-				twl6030_set_pwm_level(di->led.cur);
-			} else if (di->led.cur > di->led.target) {
-				di->led.cur = twl6030_led_add(di, -di->led.led_step);
-				twl6030_set_pwm_level(di->led.cur);
-			}
-
-			if (di->led.cur == di->led.target) {
-				int temp = di->led.target;
-				di->led.target = di->led.base;
-				di->led.base = temp;
-			}
-
-			mod_timer(&di->led_timer, msecs_to_jiffies(di->led.rate) + jiffies);
-			break;
-	}
-}
-
-static void twl6030_led_work(struct work_struct *work)
-{
-	struct twl6030_charger_device_info *di = container_of(work,
-			struct twl6030_charger_device_info, led_work);
-	twl6030_led_run(di);
-}
-
-static void twl6030_eval_led_state(struct twl6030_charger_device_info *di)
-{
-	if (is_powered(di)) {
-		if (is_charging(di)) {
-			if (di->led.state != LED_STATE_OSCILLATE) {
-				del_timer_sync(&di->led_timer);
-
-				di->led.state = LED_STATE_OSCILLATE;
-				di->led.target = di->led.led_high;
-				di->led.base = di->led.led_low;
-				di->led.rate = LED_UPDATE_RATE_MS;
-
-				twl6030_led_run(di);
-			}
-		} else {
-			if (di->led.state != LED_STATE_ON &&
-					!(di->led.state == LED_STATE_RAMP && di->led.next == LED_STATE_ON
-						&& di->led.target == (di->led.led_high >> 2))) {
-				del_timer_sync(&di->led_timer);
-
-				di->led.state = LED_STATE_RAMP;
-				di->led.target = di->led.led_high >> 2;
-				di->led.rate = LED_UPDATE_RATE_MS;
-				di->led.next = LED_STATE_ON;
-
-				twl6030_led_run(di);
-			}
-		}
-	} else {
-		if (di->led.state != LED_STATE_OFF && !(di->led.state == LED_STATE_RAMP
-					&& di->led.next == LED_STATE_OFF && di->led.target == 0x00)) {
-			del_timer_sync(&di->led_timer);
-
-			di->led.state = LED_STATE_RAMP;
-			di->led.target = 0x00;
-			di->led.rate = LED_UPDATE_RATE_MS;
-			di->led.next = LED_STATE_OFF;
-
-			twl6030_led_run(di);
-		}
-	}
+	charger_update_state(di);
 }
 
 static struct power_supply *get_battery_power_supply(
-		struct twl6030_charger_device_info *di)
+		struct charger_info *di)
 {
 	if (!di->battery)
 		di->battery = power_supply_get_by_name(di->usb.supplied_to[0]);
-	
+
 	return di->battery;
 }
 
 /* charger configuration */
-static void twl6030_config_min_vbus_reg(struct twl6030_charger_device_info *di,
+static void charger_config_min_vbus_reg(struct charger_info *di,
 		unsigned int value)
 {
 	u8 rd_reg = 0;
@@ -642,10 +384,11 @@ static void twl6030_config_min_vbus_reg(struct twl6030_charger_device_info *di,
 	if (!ret)
 		return;
 err:
-	pr_err("%s: Error access to TWL6030 (%d)\n", __func__, ret);
+	dev_err(di->dev, "%s: error while accessing i2c: %d\n",
+			__func__, ret);
 }
 
-static void twl6030_config_iterm_reg(struct twl6030_charger_device_info *di,
+static void charger_config_iterm_reg(struct charger_info *di,
 		unsigned int term_currentmA)
 {
 	int ret;
@@ -659,10 +402,11 @@ static void twl6030_config_iterm_reg(struct twl6030_charger_device_info *di,
 	ret = twl_i2c_write_u8(TWL6030_MODULE_CHARGER, term_currentmA,
 			CHARGERUSB_CTRL2);
 	if (ret)
-		pr_err("%s: Error access to TWL6030 (%d)\n", __func__, ret);
+		dev_err(di->dev, "%s: error while accessing i2c: %d\n",
+				__func__, ret);
 }
 
-static int twl6030_get_volimit_config(void)
+static int charger_get_volimit_config(void)
 {
 	u8 reg;
 	int ret;
@@ -676,7 +420,7 @@ static int twl6030_get_volimit_config(void)
 	return (((int) reg) * 20) + 3500;
 }
 
-static int twl6030_get_vilimit_config(void)
+static int charger_get_vilimit_config(void)
 {
 	u8 reg;
 	int ret;
@@ -695,7 +439,7 @@ static int twl6030_get_vilimit_config(void)
 	}
 }
 
-static int twl6030_is_volimit_locked(void)
+static int charger_is_volimit_locked(void)
 {
 	u8 reg;
 	int ret;
@@ -709,7 +453,7 @@ static int twl6030_is_volimit_locked(void)
 	return !!(reg & LOCK_LIMIT);
 }
 
-static void twl6030_config_voreg_reg(struct twl6030_charger_device_info *di,
+static void charger_config_voreg_reg(struct charger_info *di,
 		unsigned int voltagemV)
 {
 	int ret;
@@ -726,7 +470,7 @@ static void twl6030_config_voreg_reg(struct twl6030_charger_device_info *di,
 		pr_err("%s: Error access to TWL6030 (%d)\n", __func__, ret);
 }
 
-static void twl6030_config_vichrg_reg(struct twl6030_charger_device_info *di,
+static void charger_config_vichrg_reg(struct charger_info *di,
 		unsigned int currentmA)
 {
 	int ret;
@@ -746,7 +490,7 @@ static void twl6030_config_vichrg_reg(struct twl6030_charger_device_info *di,
 		pr_err("%s: Error access to TWL6030 (%d)\n", __func__, ret);
 }
 
-static void twl6030_config_cinlimit_reg(struct twl6030_charger_device_info *di,
+static void charger_config_cinlimit_reg(struct charger_info *di,
 		unsigned int currentmA)
 {
 	int ret;
@@ -767,7 +511,7 @@ static void twl6030_config_cinlimit_reg(struct twl6030_charger_device_info *di,
 		pr_err("%s: Error access to TWL6030 (%d)\n", __func__, ret);
 }
 
-static void twl6030_config_limit1_reg(struct twl6030_charger_device_info *di,
+static void charger_config_limit1_reg(struct charger_info *di,
 		unsigned int voltagemV)
 {
 	int ret;
@@ -784,7 +528,7 @@ static void twl6030_config_limit1_reg(struct twl6030_charger_device_info *di,
 		pr_err("%s: Error access to TWL6030 (%d)\n", __func__, ret);
 }
 
-static void twl6030_config_limit2_reg(struct twl6030_charger_device_info *di,
+static void charger_config_limit2_reg(struct charger_info *di,
 		unsigned int currentmA)
 {
 	int ret;
@@ -805,24 +549,16 @@ static void twl6030_config_limit2_reg(struct twl6030_charger_device_info *di,
 		pr_err("%s: Error access to TWL6030 (%d)\n", __func__, ret);
 }
 
-static int twl6030_set_watchdog(struct twl6030_charger_device_info *di, int val)
+static int charger_pet_watchdog(struct charger_info *di)
 {
-	di->watchdog_duration = val;
-	return twl_i2c_write_u8(TWL6030_MODULE_CHARGER, val, CONTROLLER_WDG);
+	return twl_i2c_write_u8(TWL6030_MODULE_CHARGER, di->watchdog_duration, CONTROLLER_WDG);
 }
-
-
-static const int vichrg[] = {
-	300, 350, 400, 450, 500, 600, 700, 800,
-	900, 1000, 1100, 1200, 1300, 1400, 1500, 300
-};
 
 /*
  * Return channel value
  * Or < 0 on failure.
  */
-static int twl6030_get_gpadc_conversion(struct twl6030_charger_device_info *di,
-		int channel_no)
+static int charger_get_gpadc_conversion(struct charger_info *di, int channel_no)
 {
 	struct twl6030_gpadc_request req;
 	int temp = 0;
@@ -842,85 +578,154 @@ static int twl6030_get_gpadc_conversion(struct twl6030_charger_device_info *di,
 	return temp;
 }
 
-static int is_battery_present(struct twl6030_charger_device_info *di)
-{
-	/* TODO */
-	return 1;
-}
-
 /* TODO: remove this hack once notle-usb-mux.c takes over the MUX config completely */
 extern void usb_mux_force(int use_usb);
 
-static void twl6030_stop_usb_charger(struct twl6030_charger_device_info *di)
+static void charger_stop_usb_charger(struct charger_info *di)
 {
 	int ret;
 
 	ret = twl_i2c_write_u8(TWL6030_MODULE_CHARGER, 0, CONTROLLER_CTRL1);
 	if (ret)
-		pr_err("%s: Error access to TWL6030 (%d)\n", __func__, ret);
-	dev_warn(di->dev, "battery: CHARGER OFF\n");
+		goto i2c_error;
+
+	dev_warn(di->dev, "CHARGER OFF\n");
 
 	usb_mux_force(false);
+
+	/* TODO: stop current monitor/control loop */
+
+	return;
+
+i2c_error:
+	dev_err(di->dev, "%s: error while accessing i2c: %d\n", __func__, ret);
 }
 
-static void twl6030_start_usb_charger(struct twl6030_charger_device_info *di, int mA)
+static void charger_start_usb_charger(struct charger_info *di)
 {
 	int ret;
 
-	if (!is_battery_present(di)) {
-		dev_err(di->dev, "BATTERY NOT DETECTED!\n");
-		return;
-	}
-
-	if (di->charge_disabled)
-		return;
-
-	if (mA < 50) {
-		twl6030_stop_usb_charger(di);
-		return;
-	}
+	dev_dbg(di->dev, "%s: vichrg=%d cinlimit=%d voreg=%d iterm=%d\n",
+			__func__, di->charger_outcurrent_mA,
+			di->current_limit_mA, di->charger_voltage_mV,
+			di->termination_current_mA);
 
 	usb_mux_force(true);
 
-	twl6030_config_vichrg_reg(di, di->charger_outcurrent_mA);
-	twl6030_config_cinlimit_reg(di, mA);
-	twl6030_config_voreg_reg(di, di->charger_voltage_mV);
-	twl6030_config_iterm_reg(di, di->platform_data->termination_current_mA);
+	charger_config_vichrg_reg(di, di->charger_outcurrent_mA);
+	charger_config_cinlimit_reg(di, di->current_limit_mA);
+	charger_config_voreg_reg(di, di->charger_voltage_mV);
+	charger_config_iterm_reg(di, di->termination_current_mA);
 
-	if (mA >= 50) {
-		twl6030_set_watchdog(di, di->watchdog_duration);
-		/* disable current termination, suspend mode, boost mode, etc */
-		twl_i2c_write_u8(TWL6030_MODULE_CHARGER, 0, CHARGERUSB_CTRL1);
-		ret = twl_i2c_write_u8(TWL6030_MODULE_CHARGER, CONTROLLER_CTRL1_EN_CHARGER, CONTROLLER_CTRL1);
-		if (ret)
-			goto err;
-	}
+	charger_pet_watchdog(di);
 
-	dev_warn(di->dev, "battery: CHARGER ON\n");
+	/* disable current termination, suspend mode, boost mode, etc */
+	ret = twl_i2c_write_u8(TWL6030_MODULE_CHARGER, 0, CHARGERUSB_CTRL1);
+	if (ret)
+		goto i2c_error;
+
+	ret = twl_i2c_write_u8(TWL6030_MODULE_CHARGER, CONTROLLER_CTRL1_EN_CHARGER,
+			CONTROLLER_CTRL1);
+	if (ret)
+		goto i2c_error;
+
+	dev_warn(di->dev, "CHARGER ON\n");
+
+	/* TODO: kick off current monitor/control loop */
+
 	return;
 
-err:
-	pr_err("%s: Error access to TWL6030 (%d)\n", __func__, ret);
+i2c_error:
+	dev_err(di->dev, "%s: error while accessing i2c: %d\n", __func__, ret);
 }
 
-/*
- * Interrupt service routine
- *
- * Attends to TWL 6030 power module interruptions events, specifically
- * USB_PRES (USB charger presence) CHG_PRES (AC charger presence) events
- *
- */
-static irqreturn_t twl6030_charger_ctrl_interrupt(int irq, void *_di)
+static int charger_ctrl_mask_interrupt(u8 set_mask, u8 clear_mask)
 {
-	struct twl6030_charger_device_info *di = _di;
-	queue_work(di->wq, &di->charge_control_work);
-	dev_warn(di->dev, "battery: CHARGE CTRL IRQ\n");
+	u8 val, mask;
+	int ret;
+
+	ret = twl_i2c_read_u8(TWL6030_MODULE_CHARGER, &val, CHARGERUSB_INT_MASK);
+	if (ret)
+		goto error;
+
+	mask = (val | set_mask) & ~clear_mask;
+
+	if (mask != val) {
+		ret = twl_i2c_write_u8(TWL6030_MODULE_CHARGER, mask,
+				CHARGERUSB_INT_MASK);
+		if (ret)
+			goto error;
+	}
+
+error:
+	return ret;
+}
+
+static irqreturn_t charger_ctrl_interrupt(int irq, void *_di)
+{
+	struct charger_info *di = _di;
+	u8 stat_toggle, stat_reset, stat_set;
+	u8 reg_stat1, reg_hw_cond;
+	int charge_control_state;
+	int ret;
+
+	ret = twl_i2c_read_u8(TWL6030_MODULE_CHARGER, &reg_stat1, CONTROLLER_STAT1);
+	if (ret)
+		goto i2c_error;
+
+	ret = twl_i2c_read_u8(TWL6030_MODULE_ID0, &reg_hw_cond, STS_HW_CONDITIONS);
+	if (ret)
+		goto i2c_error;
+
+	charge_control_state = di->charge_control_state;
+
+	stat_toggle = charge_control_state ^ reg_stat1;
+	stat_set = stat_toggle & reg_stat1;
+	stat_reset = stat_toggle & charge_control_state;
+
+	dev_dbg(di->dev, "%s: stat_toggle=%02x stat_set=%02x stat_reset=%02x hw_cond=%02x\n", __func__,
+			stat_toggle, stat_set, stat_reset, reg_hw_cond);
+
+	if (stat_reset & VBUS_DET) {
+		dev_info(di->dev, "VBUS_DET OFF\n");
+
+		charger_lock(di);
+
+		di->vbus_online = 0;
+		di->otg_online = 0;
+
+		charger_unlock(di);
+
+		charger_update_state(di);
+	} else if (stat_set & VBUS_DET) {
+		dev_info(di->dev, "VBUS_DET ON\n");
+
+		charger_lock(di);
+
+		if (reg_hw_cond & STS_USB_ID) {
+			dev_info(di->dev, "USB_ID ON\n");
+			di->otg_online = 1;
+		}
+
+		di->vbus_online = 1;
+
+		charger_unlock(di);
+
+		charger_update_state(di);
+	}
+
+	di->charge_control_state = reg_stat1;
+
+	return IRQ_HANDLED;
+
+i2c_error:
+	dev_err(di->dev, "%s: error while accessing i2c: %d\n", __func__, ret);
 	return IRQ_HANDLED;
 }
 
-static irqreturn_t twl6030_charger_fault_interrupt(int irq, void *_di)
+static irqreturn_t charger_fault_interrupt(int irq, void *_di)
 {
-	struct twl6030_charger_device_info *di = _di;
+	struct charger_info *di = _di;
 	int ret;
 
 	u8 usb_charge_sts, usb_charge_sts1, usb_charge_sts2;
@@ -940,190 +745,89 @@ static irqreturn_t twl6030_charger_fault_interrupt(int irq, void *_di)
 	if (ret)
 		goto err;
 
-	dev_warn(di->dev, "battery: CHARGE FAULT IRQ: STS %02x INT1 %02x INT2 %02x\n",
+	dev_warn(di->dev, "CHARGE FAULT IRQ: STS %02x INT1 %02x INT2 %02x\n",
 			usb_charge_sts, usb_charge_sts1, usb_charge_sts2);
 err:
-	queue_work(di->wq, &di->charge_fault_work);
+	charger_update_state(di);
 	return IRQ_HANDLED;
 }
 
-static enum power_supply_property twl6030_usb_props[] = {
+static enum power_supply_property charger_usb_props[] = {
 	POWER_SUPPLY_PROP_ONLINE,
 	POWER_SUPPLY_PROP_VOLTAGE_NOW,
 };
 
-#define to_twl6030_usb_device_info(x) container_of((x), \
-		struct twl6030_charger_device_info, usb);
-
-static int twl6030_usb_get_property(struct power_supply *psy,
+static int charger_usb_get_property(struct power_supply *psy,
 		enum power_supply_property psp, union power_supply_propval *val)
 {
-	struct twl6030_charger_device_info *di = to_twl6030_usb_device_info(psy);
+	struct charger_info *di = container_of(psy, struct charger_info, usb);
 
 	switch (psp) {
-	case POWER_SUPPLY_PROP_ONLINE:
-		val->intval = di->vbus_online;
-		break;
-	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
-		val->intval = twl6030_get_gpadc_conversion(di, 10) * 1000;
-		break;
-	default:
-		return -EINVAL;
+		case POWER_SUPPLY_PROP_ONLINE:
+			val->intval = di->vbus_online;
+			break;
+		case POWER_SUPPLY_PROP_VOLTAGE_NOW:
+			val->intval = charger_get_gpadc_conversion(di, 10) * 1000;
+			break;
+		default:
+			return -EINVAL;
 	}
 
 	return 0;
 }
 
-static int twl6030_usb_notifier_call(struct notifier_block *nb,
+static int charger_usb_notifier_call(struct notifier_block *nb,
 		unsigned long event, void *data)
 {
-	struct twl6030_charger_device_info *di =
-		container_of(nb, struct twl6030_charger_device_info, nb);
+	struct charger_info *di = container_of(nb, struct charger_info, notifier);
+	enum power_supply_type *supply = data;
+
+	charger_lock(di);
+
+	switch (event) {
+		case TWL6030_USB_EVENT_VBUS_ON:
+			di->usb_online = 1;
+			break;
+
+		case TWL6030_USB_EVENT_VBUS_OFF:
+		case TWL6030_USB_EVENT_OTG_OFF:
+			di->charger_supply_type = POWER_SUPPLY_TYPE_UNKNOWN;
+			di->usb_online = 0;
+			break;
+
+		case TWL6030_USB_EVENT_VBUS_DETECT:
+			di->charger_supply_type = *supply;
+			break;
+
+		default:
+			goto done;
+	}
 
 	di->usb_event = event;
-	switch (event) {
-		case USB_EVENT_VBUS:
-			di->usb_online = *((unsigned int *) data);
-			break;
-		case USB_EVENT_ENUMERATED:
-			di->usb_max_power = *((unsigned int *) data);
-			break;
-		case USB_EVENT_CHARGER:
-		case USB_EVENT_NONE:
-		case USB_EVENT_ID:
-			break;
-		default:
-			return NOTIFY_OK;
-	}
 
-	if (di->usb_event != event) {
-		di->usb_event = event;
-		queue_work(di->wq, &di->charge_control_work);
-	}
+	dev_info(di->dev, "usb_event=%ld usb_online=%d charger_supply_type=%d\n",
+			di->usb_event, di->usb_online, di->charger_supply_type);
+
+done:
+	charger_unlock(di);
+
+	charger_update_state(di);
 
 	return NOTIFY_OK;
 }
 
-static void twl6030_determine_charge_state(struct twl6030_charger_device_info *di)
+static void charger_gas_gauge_update(struct charger_info *di)
 {
-	u8 stat1;
-	int newstate = STATE_BATTERY;
-
-	/* TODO: i2c error -> fault? */
-	twl_i2c_read_u8(TWL6030_MODULE_CHARGER, &stat1, CONTROLLER_STAT1);
-
-	/* printk("battery: determine_charge_state() stat1=%02x int1=%02x\n", stat1, int1); */
-
-	if ((stat1 & VBUS_DET) && !otg_enabled(di->phy)) {
-		/* dedicated charger detected by PHY? */
-		if (di->usb_event == USB_EVENT_CHARGER)
-			newstate = STATE_AC;
-		else
-			newstate = STATE_USB;
-
-		if (!di->vbus_online) {
-			di->vbus_online = 1;
-			wake_lock(&usb_wake_lock);
-			power_supply_changed(&di->usb);
-		}
-	} else {
-		/* ensure we don't have a stale USB_EVENT_CHARGER should detect bounce */
-		di->usb_event = USB_EVENT_NONE;
-
-		if (di->vbus_online) {
-			di->vbus_online = 0;
-			/* give USB and userspace some time to react before suspending */
-			wake_lock_timeout(&usb_wake_lock, HZ / 2);
-			power_supply_changed(&di->usb);
-		}
-	}
-
-	if (di->state == newstate)
-		return;
-
-	switch (newstate) {
-		case STATE_FAULT:
-		case STATE_BATTERY:
-			if (is_charging(di))
-				twl6030_stop_usb_charger(di);
-			break;
-		case STATE_USB:
-		case STATE_AC:
-			/* moving out of STATE_FULL should only happen on unplug
-			 * or if we actually run down the battery capacity
-			 */
-			if (di->state == STATE_FULL) {
-				newstate = STATE_FULL;
-				break;
-			}
-
-			/* TODO: high current? */
-			if (!is_charging(di))
-				twl6030_start_usb_charger(di, di->current_limit_mA);
-			break;
-	}
-
-	if (di->state != newstate) {
-		dev_warn(di->dev, "battery: state %s -> %s\n",
-				twl6030_state[di->state], twl6030_state[newstate]);
-		di->state = newstate;
-		twl6030_eval_led_state(di);
-	}
-}
-
-static void twl6030_charge_control_work(struct work_struct *work)
-{
-	struct twl6030_charger_device_info *di =
-		container_of(work, struct twl6030_charger_device_info, charge_control_work);
-
-	twl6030_determine_charge_state(di);
-}
-
-static void twl6030_charge_fault_work(struct work_struct *work)
-{
-	struct twl6030_charger_device_info *di =
-		container_of(work, struct twl6030_charger_device_info, charge_fault_work);
-
-	u8 usb_charge_sts1;
-
-	twl_i2c_read_u8(TWL6030_MODULE_CHARGER, &usb_charge_sts1,
-						CHARGERUSB_STATUS_INT1);
-
-	if (usb_charge_sts1 & (1<<2))
-		twl6030_stop_usb_charger(di);
-	else if (!(usb_charge_sts1 & (1<<2)) && is_charging(di))
-		twl6030_start_usb_charger(di, di->current_limit_mA);
-
-	msleep(10);
-
-	twl6030_determine_charge_state(di);
-}
-
-static void twl6030_monitor_work(struct work_struct *work)
-{
-	struct twl6030_charger_device_info *di = container_of(work,
-			struct twl6030_charger_device_info, monitor_work.work);
-
 	struct power_supply *battery;
 	union power_supply_propval val;
-	struct timespec ts;
-
 	int capacity;
 	int raw_capacity;
 	int voltage_uV;
 	int current_uA;
 	int temperature_cC;
-	int current_limit_mA;
 	int qpassed_mAh;
-	int charging;
-	int ret;
 	int status;
-
-	/* pet the charger watchdog */
-	if (is_charging(di))
-		twl6030_set_watchdog(di, di->watchdog_duration);
-
-	queue_delayed_work(di->wq, &di->monitor_work, di->monitor_interval_jiffies);
+	int ret;
 
 	battery = get_battery_power_supply(di);
 	if (!battery) {
@@ -1190,295 +894,174 @@ static void twl6030_monitor_work(struct work_struct *work)
 		qpassed_mAh = val.intval;
 	}
 
-#if defined(CONFIG_MACH_NOTLE)
-        if (!notle_version_support_battery_temperature()) {
-                // Use a default temp of 275 for 500mA charging on EVT1
-		temperature_cC = 275;
-        }
-#endif
-
 	/* store values in device info */
-	di->voltage_uV = voltage_uV;
-	di->current_uA = current_uA;
-	di->temperature_cC = temperature_cC;
+	di->gg_capacity = capacity;
+	di->gg_raw_capacity = raw_capacity;
+	di->gg_status = status;
+	di->gg_voltage_uV = voltage_uV;
+	di->gg_current_uA = current_uA;
+	di->gg_temperature_cC = temperature_cC;
+	di->gg_qpassed_mAh = qpassed_mAh;
 
-	/* manage temperature constraints */
-	current_limit_mA = di->current_limit_mA;
-	charging = is_charging(di);
+	dev_info(di->dev, "capacity=%d%% raw_capacity=%d%% status=%02x voltage_uV=%d current_uA=%d "
+			"temperature_cC=%d qpassed_mAh=%d state=%s\n",
+			di->gg_capacity, di->gg_raw_capacity, di->gg_status, di->gg_voltage_uV,
+			di->gg_current_uA, di->gg_temperature_cC, di->gg_qpassed_mAh, state_to_str(di->state));
 
-	if (temperature_cC < 100 || temperature_cC > 450 || di->charge_disabled) {
-		di->state = STATE_FAULT;
-		di->current_limit_mA = 0;
-#if 0
-	} else if (temperature_cC < 150) {
-		di->current_limit_mA = 169;
-	} else if (temperature_cC < 250) {
-		di->current_limit_mA = 282;
-#endif
+error:
+	return;
+}
+
+static void charger_check_temp_limits(struct charger_info *di)
+{
+	/* check against temperature limits */
+	if (di->gg_temperature_cC < CHARGER_LOW_TEMP_LIMIT || di->gg_temperature_cC > CHARGER_HIGH_TEMP_LIMIT) {
+		if (di->temperature_lockout == 0)
+			dev_warn(di->dev, "temperature is outside charging limits\n");
+		di->temperature_lockout = 1;
 	} else {
-		di->current_limit_mA = 500;
+		di->temperature_lockout = 0;
 	}
 
-	if (charging && current_limit_mA != di->current_limit_mA) {
-		// update current setting, 0 will stop charging
-		twl6030_start_usb_charger(di, di->current_limit_mA);
-		twl6030_eval_led_state(di);
-	}
+	/* check against critical temperature limits */
+	if (di->gg_temperature_cC < CHARGER_LOW_TEMP_CRITICAL || di->gg_temperature_cC > CHARGER_HIGH_TEMP_CRITICAL) {
+		di->temperature_critical_count++;
 
-	/* with charging state updated, handle hard poweroff points */
-	if (temperature_cC < -100 || temperature_cC > 600) {
-		dev_err(di->dev, "Battery temperature critical! temp=%d\n", temperature_cC);
-		di->temperature_critical++;
-
-		// shut down the device if we get two successive critical readings
-		// this give the device time to log the critical temperature message
-		if (di->temperature_critical >= 2) {
-			dev_err(di->dev, "Powering down!\n");
+		if (di->temperature_critical_count >= 2) {
+			dev_err(di->dev, "temperature is critical, powering down!!\n");
 			kernel_power_off();
 		}
-	} else {
-		// reset counter if we get a non-critical reading
-		di->temperature_critical = 0;
+	}
+}
+
+static void charger_check_battery_level(struct charger_info *di)
+{
+	/* check for battery full condition */
+	if (is_charging(di) && di->gg_capacity == 100) {
+		if (di->gg_status == POWER_SUPPLY_STATUS_FULL) {
+			dev_warn(di->dev, "gas gauge reports full capacity\n");
+			di->battery_full = 1;
+		} else if (di->gg_current_uA < CHARGER_TAPER_CURRENT) {
+			dev_warn(di->dev, "gas gauge did not report full capacity\n");
+			di->battery_full = 1;
+		}
 	}
 
-	/*
-	 * We will charge the device to 100% and the gas gauge reports the battery is full
-	 * As a safety, if the gas gauge did not report that, charging will stop when
-	 * we dip below 20mA.
-	 */
-	if (is_charging(di) && capacity == 100) {
+	if (!is_powered(di))
+		di->battery_full = 0;
 
-		if (status == POWER_SUPPLY_STATUS_FULL) {
-			dev_warn(di->dev,
-				"bq27x00 reports full capacity, charging stop\n");
-			di->state = STATE_FULL;
-			twl6030_stop_usb_charger(di);
-			twl6030_eval_led_state(di);
-		} else if (current_uA < 20000) {
-			dev_warn(di->dev,
-				"bq27x00 did not report full capacity, charging stop\n");
-			di->state = STATE_FULL;
-			twl6030_stop_usb_charger(di);
-			twl6030_eval_led_state(di);
+	if (di->battery_full && di->gg_capacity <= di->recharge_capacity) {
+		if (is_powered(di) && !is_charging(di))
+			dev_warn(di->dev, "battery drained from full to %d%%, charging again\n", di->gg_capacity);
+		di->battery_full = 0;
+	}
+}
+
+static void charger_work(struct work_struct *work)
+{
+	struct charger_info *di = container_of(work, struct charger_info, work);
+	int next_state;
+	bool limiting_active;
+	bool charge_source;
+
+	if (is_charging(di))
+		charger_pet_watchdog(di);
+
+	charger_lock(di);
+
+	/* update inputs and limit conditions */
+	charger_gas_gauge_update(di);
+	charger_check_temp_limits(di);
+	charger_check_battery_level(di);
+
+	/* aggregate limiting factors */
+	limiting_active = di->battery_full || di->charge_disabled ||
+		di->temperature_lockout || di->invalid_charger;
+
+	/* hardware ready for charging? */
+	charge_source = di->vbus_online && !di->otg_online;
+
+	dev_dbg(di->dev, "%s: battery_full=%d charge_disabled=%d temperature_lockout=%d "
+			"invalid_charger=%d vbus_online=%d usb_online=%d otg_online=%d\n", __func__,
+			di->battery_full, di->charge_disabled, di->temperature_lockout,
+			di->invalid_charger, di->vbus_online, di->usb_online, di->otg_online);
+
+	/* determine the next charger state */
+	switch (di->state) {
+		case CHARGER_STATE_UNPLUGGED:
+		case CHARGER_STATE_CHARGING:
+			if (charge_source) {
+				if (limiting_active)
+					next_state = CHARGER_STATE_NOT_CHARGING;
+				else
+					next_state = CHARGER_STATE_CHARGING;
+			} else {
+				next_state = CHARGER_STATE_UNPLUGGED;
+			}
+			break;
+
+		case CHARGER_STATE_NOT_CHARGING:
+			if (charge_source) {
+				if (limiting_active)
+					next_state = CHARGER_STATE_NOT_CHARGING;
+				else
+					next_state = CHARGER_STATE_CHARGING;
+			} else {
+				next_state = CHARGER_STATE_UNPLUGGED;
+			}
+			break;
+
+		default:
+			next_state = di->state; // silence compiler warning
+	}
+
+	/* if the state changed, fulfill the required changes */
+	if (next_state != di->state) {
+		dev_info(di->dev, "transitioning from %s to %s\n", state_to_str(di->state),
+				state_to_str(next_state));
+
+		switch (next_state) {
+			case CHARGER_STATE_UNPLUGGED:
+				wake_lock_timeout(&di->wake_lock, HZ / 2);
+				charger_stop_usb_charger(di);
+				break;
+
+			case CHARGER_STATE_NOT_CHARGING:
+				if (!is_powered(di))
+					wake_lock(&di->wake_lock);
+
+				charger_stop_usb_charger(di);
+				break;
+
+			case CHARGER_STATE_CHARGING:
+				if (!is_powered(di))
+					wake_lock(&di->wake_lock);
+
+				charger_start_usb_charger(di);
+				break;
 		}
 
+		di->state = next_state;
+		power_supply_changed(&di->usb);
+
+		twl6030_eval_led_state(di->led, is_powered(di), is_charging(di));
 	}
 
-	if (di->state == STATE_FULL && capacity <= di->recharge_capacity) {
-		dev_warn(di->dev, "battery: drained from full to %d%%, charging again\n", capacity);
-		di->state = STATE_USB;
-		twl6030_start_usb_charger(di, di->current_limit_mA);
-		twl6030_eval_led_state(di);
-	}
+	charger_unlock(di);
 
-	getnstimeofday(&ts);
-	dev_warn(di->dev,
-		"capacity=%d%% raw_capacity=%d%% "
-		"voltage_uV=%d uV current_uA=%d uA "
-		"temperature_cC=%d current_limit_mA=%d "
-		"qpassed=%d mAh %s%s [%016lu]\n",
-		capacity, raw_capacity,
-		voltage_uV, current_uA,
-		temperature_cC, di->current_limit_mA,
-		qpassed_mAh, twl6030_state[di->state],
-		is_charging(di) ? " CHG" : "", (unsigned long) ts.tv_sec);
-error:
-	twl6030_determine_charge_state(di);
-}
-
-static ssize_t set_led_high(struct device *dev,
-	struct device_attribute *attr, const char *buf, size_t count)
-{
-	long val;
-	int status = count;
-	struct twl6030_charger_device_info *di = dev_get_drvdata(dev);
-
-	if ((strict_strtol(buf, 10, &val) < 0) || (val < 0)
-			|| (val > 0xff))
-		return -EINVAL;
-	di->led.led_high = val;
-
-	return status;
-}
-
-static ssize_t show_led_high(struct device *dev,
-		struct device_attribute *attr, char *buf)
-{
-	struct twl6030_charger_device_info *di = dev_get_drvdata(dev);
-
-	return sprintf(buf, "%d\n", di->led.led_high);
-}
-
-static ssize_t set_led_low(struct device *dev,
-	struct device_attribute *attr, const char *buf, size_t count)
-{
-	long val;
-	int status = count;
-	struct twl6030_charger_device_info *di = dev_get_drvdata(dev);
-
-	if ((strict_strtol(buf, 10, &val) < 0) || (val < 0)
-			|| (val > 0xff))
-		return -EINVAL;
-	di->led.led_low = val;
-
-	return status;
-}
-
-static ssize_t show_led_low(struct device *dev,
-		struct device_attribute *attr, char *buf)
-{
-	struct twl6030_charger_device_info *di = dev_get_drvdata(dev);
-
-	return sprintf(buf, "%d\n", di->led.led_low);
+	/* update timer */
+	mod_timer(&di->timer, di->monitor_interval_jiffies + jiffies);
 }
 
 static ssize_t show_vbus_voltage(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
 	int val;
-	struct twl6030_charger_device_info *di = dev_get_drvdata(dev);
+	struct charger_info *di = dev_get_drvdata(dev);
 
-	val = twl6030_get_gpadc_conversion(di, 10);
-
-	return sprintf(buf, "%d\n", val);
-}
-
-static ssize_t show_id_level(struct device *dev, struct device_attribute *attr,
-							char *buf)
-{
-	int val;
-	struct twl6030_charger_device_info *di = dev_get_drvdata(dev);
-
-	val = twl6030_get_gpadc_conversion(di, 14);
+	val = charger_get_gpadc_conversion(di, 10);
 
 	return sprintf(buf, "%d\n", val);
-}
-
-static ssize_t set_regulation_voltage(struct device *dev,
-	struct device_attribute *attr, const char *buf, size_t count)
-{
-	long val;
-	int status = count;
-	struct twl6030_charger_device_info *di = dev_get_drvdata(dev);
-
-	if ((strict_strtol(buf, 10, &val) < 0) || (val < 3500)
-			|| (val > di->max_bat_voltage_mV))
-		return -EINVAL;
-	di->charger_voltage_mV = val;
-	twl6030_config_voreg_reg(di, val);
-
-	return status;
-}
-
-static ssize_t show_regulation_voltage(struct device *dev,
-	struct device_attribute *attr, char *buf)
-{
-	unsigned int val;
-	struct twl6030_charger_device_info *di = dev_get_drvdata(dev);
-
-	val = di->max_bat_voltage_mV;
-	return sprintf(buf, "%u\n", val);
-}
-
-static ssize_t set_termination_current(struct device *dev,
-	struct device_attribute *attr, const char *buf, size_t count)
-{
-	long val;
-	int status = count;
-	struct twl6030_charger_device_info *di = dev_get_drvdata(dev);
-
-	if ((strict_strtol(buf, 10, &val) < 0) || (val < 50) || (val > 400))
-		return -EINVAL;
-	di->platform_data->termination_current_mA = val;
-	twl6030_config_iterm_reg(di, val);
-
-	return status;
-}
-
-static ssize_t show_termination_current(struct device *dev,
-			struct device_attribute *attr, char *buf)
-{
-	unsigned int val;
-	struct twl6030_charger_device_info *di = dev_get_drvdata(dev);
-
-	val = di->platform_data->termination_current_mA;
-	return sprintf(buf, "%u\n", val);
-}
-
-static ssize_t set_cin_limit(struct device *dev,
-		struct device_attribute *attr, const char *buf, size_t count)
-{
-	long val;
-	int status = count;
-	struct twl6030_charger_device_info *di = dev_get_drvdata(dev);
-
-	if ((strict_strtol(buf, 10, &val) < 0) || (val < 50) || (val > 1500))
-		return -EINVAL;
-	di->charger_incurrent_mA = val;
-	twl6030_config_cinlimit_reg(di, val);
-
-	return status;
-}
-
-static ssize_t show_cin_limit(struct device *dev, struct device_attribute *attr,
-								  char *buf)
-{
-	unsigned int val;
-	struct twl6030_charger_device_info *di = dev_get_drvdata(dev);
-
-	val = di->charger_incurrent_mA;
-	return sprintf(buf, "%u\n", val);
-}
-
-static ssize_t set_charge_current(struct device *dev,
-		struct device_attribute *attr, const char *buf, size_t count)
-{
-	long val;
-	int status = count;
-	struct twl6030_charger_device_info *di = dev_get_drvdata(dev);
-
-	if ((strict_strtol(buf, 10, &val) < 0) || (val < 300)
-			|| (val > di->max_charger_current_mA))
-		return -EINVAL;
-	di->charger_outcurrent_mA = val;
-	twl6030_config_vichrg_reg(di, val);
-
-	return status;
-}
-
-static ssize_t show_charge_current(struct device *dev,
-		struct device_attribute *attr, char *buf)
-{
-	unsigned int val;
-	struct twl6030_charger_device_info *di = dev_get_drvdata(dev);
-
-	val = di->charger_outcurrent_mA;
-	return sprintf(buf, "%u\n", val);
-}
-
-static ssize_t set_min_vbus(struct device *dev, struct device_attribute *attr,
-				  const char *buf, size_t count)
-{
-	long val;
-	int status = count;
-	struct twl6030_charger_device_info *di = dev_get_drvdata(dev);
-
-	if ((strict_strtol(buf, 10, &val) < 0) || (val < 4200) || (val > 4760))
-		return -EINVAL;
-	di->min_vbus = val;
-	twl6030_config_min_vbus_reg(di, val);
-
-	return status;
-}
-
-static ssize_t show_min_vbus(struct device *dev, struct device_attribute *attr,
-				  char *buf)
-{
-	unsigned int val;
-	struct twl6030_charger_device_info *di = dev_get_drvdata(dev);
-
-	val = di->min_vbus;
-	return sprintf(buf, "%u\n", val);
 }
 
 static ssize_t set_recharge_capacity(struct device *dev, struct device_attribute *attr,
@@ -1486,11 +1069,16 @@ static ssize_t set_recharge_capacity(struct device *dev, struct device_attribute
 {
 	long val;
 	int status = count;
-	struct twl6030_charger_device_info *di = dev_get_drvdata(dev);
+	struct charger_info *di = dev_get_drvdata(dev);
 
 	if ((strict_strtol(buf, 10, &val) < 0) || (val < 0) || (val > 100))
 		return -EINVAL;
+
+	charger_lock(di);
+
 	di->recharge_capacity = val;
+
+	charger_unlock(di);
 
 	return status;
 }
@@ -1499,7 +1087,7 @@ static ssize_t show_recharge_capacity(struct device *dev, struct device_attribut
 				  char *buf)
 {
 	unsigned int val;
-	struct twl6030_charger_device_info *di = dev_get_drvdata(dev);
+	struct charger_info *di = dev_get_drvdata(dev);
 
 	val = di->recharge_capacity;
 	return sprintf(buf, "%u\n", val);
@@ -1509,93 +1097,72 @@ static ssize_t set_charge_disabled(struct device *dev, struct device_attribute *
 				  const char *buf, size_t count)
 {
 	long val;
+	bool changed;
 	int charge_disabled;
-	int status = count;
-	struct twl6030_charger_device_info *di = dev_get_drvdata(dev);
-
-	charge_disabled = di->charge_disabled;
+	struct charger_info *di = dev_get_drvdata(dev);
 
 	if (strict_strtol(buf, 10, &val) < 0)
 		return -EINVAL;
 
+	charger_lock(di);
+
+	charge_disabled = di->charge_disabled;
 	di->charge_disabled = !!val;
 
-	if (di->charge_disabled != charge_disabled) {
-		if (di->charge_disabled) {
-			di->state = STATE_FAULT;
-			twl6030_stop_usb_charger(di);
-			twl6030_eval_led_state(di);
-		} else {
-			queue_delayed_work(di->wq, &di->monitor_work, 0);
-		}
-	}
+	changed = di->charge_disabled != charge_disabled;
 
-	return status;
+	charger_unlock(di);
+
+	if (changed)
+		charger_update_state(di);
+
+	return count;
 }
 
 static ssize_t show_charge_disabled(struct device *dev, struct device_attribute *attr,
 				  char *buf)
 {
 	unsigned int val;
-	struct twl6030_charger_device_info *di = dev_get_drvdata(dev);
+	struct charger_info *di = dev_get_drvdata(dev);
 
 	val = di->charge_disabled;
 	return sprintf(buf, "%u\n", !!val);
 }
 
 static DEVICE_ATTR(vbus_voltage, S_IRUGO, show_vbus_voltage, NULL);
-static DEVICE_ATTR(id_level, S_IRUGO, show_id_level, NULL);
-static DEVICE_ATTR(regulation_voltage, S_IWUSR | S_IRUGO,
-		show_regulation_voltage, set_regulation_voltage);
-static DEVICE_ATTR(termination_current, S_IWUSR | S_IRUGO,
-		show_termination_current, set_termination_current);
-static DEVICE_ATTR(cin_limit, S_IWUSR | S_IRUGO, show_cin_limit,
-		set_cin_limit);
-static DEVICE_ATTR(charge_current, S_IWUSR | S_IRUGO, show_charge_current,
-		set_charge_current);
-static DEVICE_ATTR(min_vbus, S_IWUSR | S_IRUGO, show_min_vbus, set_min_vbus);
 static DEVICE_ATTR(recharge_capacity, S_IWUSR | S_IRUGO, show_recharge_capacity,
 		set_recharge_capacity);
-static DEVICE_ATTR(led_low, S_IWUSR | S_IRUGO, show_led_low, set_led_low);
-static DEVICE_ATTR(led_high, S_IWUSR | S_IRUGO, show_led_high, set_led_high);
 static DEVICE_ATTR(charge_disabled, S_IWUSR | S_IRUGO, show_charge_disabled,
 		set_charge_disabled);
 
-static struct attribute *twl6030_charger_attributes[] = {
+static struct attribute *charger_charger_attributes[] = {
 	&dev_attr_vbus_voltage.attr,
-	&dev_attr_id_level.attr,
-	&dev_attr_regulation_voltage.attr,
-	&dev_attr_termination_current.attr,
-	&dev_attr_cin_limit.attr,
-	&dev_attr_charge_current.attr,
-	&dev_attr_min_vbus.attr,
 	&dev_attr_recharge_capacity.attr,
-	&dev_attr_led_low.attr,
-	&dev_attr_led_high.attr,
 	&dev_attr_charge_disabled.attr,
 	NULL,
 };
 
-static const struct attribute_group twl6030_charger_attr_group = {
-	.attrs = twl6030_charger_attributes,
+static const struct attribute_group charger_charger_attr_group = {
+	.attrs = charger_charger_attributes,
 };
 
-static int __devinit twl6030_charger_probe(struct platform_device *pdev)
+static int __devinit charger_probe(struct platform_device *pdev)
 {
 	struct twl4030_charger_platform_data *pdata = pdev->dev.platform_data;
-	struct twl6030_charger_device_info *di;
+	struct charger_info *di;
+	struct device *dev = &pdev->dev;
 	int irq = -1;
 	int ret;
 
-	dev_warn(&pdev->dev, "enter\n");
+	dev_warn(dev, "enter\n");
 
 	if (!pdata) {
-		dev_dbg(&pdev->dev, "platform_data not available\n");
+		dev_dbg(dev, "platform_data not available\n");
 		return -EINVAL;
 	}
 
 	if (!pdata->supplied_to || pdata->num_supplicants < 1) {
-		dev_err(&pdev->dev, "a supplicant must be sepcified; "
+		dev_err(dev, "a supplicant must be sepcified; "
 				"supplied_to=%p num=%zu\n", pdata->supplied_to,
 				pdata->num_supplicants);
 		return -EINVAL;
@@ -1605,78 +1172,54 @@ static int __devinit twl6030_charger_probe(struct platform_device *pdev)
 	if (!di)
 		return -ENOMEM;
 
-	di->platform_data = kmemdup(pdata, sizeof(*pdata), GFP_KERNEL);
-	if (!di->platform_data) {
-		kfree(di);
-		return -ENOMEM;
-	}
+	platform_set_drvdata(pdev, di);
 
 	di->dev = &pdev->dev;
-	di->state = STATE_BATTERY;
 	di->recharge_capacity = 94;
-	di->monitor_interval_jiffies =
-		msecs_to_jiffies(pdata->monitor_interval_seconds * 1000);
+	di->monitor_interval_jiffies = 15 * HZ;
 
 	di->usb.name = "twl6030_usb";
 	di->usb.type = POWER_SUPPLY_TYPE_USB;
-	di->usb.properties = twl6030_usb_props;
-	di->usb.num_properties = ARRAY_SIZE(twl6030_usb_props);
-	di->usb.get_property = twl6030_usb_get_property;
+	di->usb.properties = charger_usb_props;
+	di->usb.num_properties = ARRAY_SIZE(charger_usb_props);
+	di->usb.get_property = charger_usb_get_property;
 	di->usb.supplied_to = pdata->supplied_to;
 	di->usb.num_supplicants = pdata->num_supplicants;
 
 	if (pdata->num_supplicants > 1) {
-		dev_warn(&pdev->dev, "more than one supplicant specified (%zu), only the "
+		dev_warn(dev, "more than one supplicant specified (%zu), only the "
 				"first will be used\n", pdata->num_supplicants);
 	}
 
-	/*
-	 * try to cache the battery power supply now. if it hasn't registered
-	 * yet we will cache it next opportunity
-	 */
-	get_battery_power_supply(di);
+	wake_lock_init(&di->wake_lock, WAKE_LOCK_SUSPEND, "charger_wake_lock");
+	mutex_init(&di->mutex);
 
-	platform_set_drvdata(pdev, di);
+	di->wq = create_freezable_workqueue(dev_name(di->dev));
+	INIT_WORK(&di->work, charger_work);
 
-	wake_lock_init(&usb_wake_lock, WAKE_LOCK_SUSPEND, "usb_wake_lock");
-
-	di->wq = create_freezable_workqueue(dev_name(&pdev->dev));
-
-	ret = power_supply_register(&pdev->dev, &di->usb);
-	if (ret) {
-		dev_err(&pdev->dev, "failed to register usb power supply\n");
-		goto usb_failed;
-	}
-
-	INIT_WORK(&di->led_work, twl6030_led_work);
-	INIT_WORK(&di->charge_control_work, twl6030_charge_control_work);
-	INIT_WORK(&di->charge_fault_work, twl6030_charge_fault_work);
-	INIT_DELAYED_WORK_DEFERRABLE(&di->monitor_work, twl6030_monitor_work);
-
-	/* initialize for USB charging */
+	setup_timer(&di->timer, charger_timer, (unsigned long) di);
 
 	/* see if the bootloader already set and locked the limits */
-	if (twl6030_is_volimit_locked() == 1) {
+	if (charger_is_volimit_locked() == 1) {
 		/* read the vo and vi reg limits set in the bootloader */
-		di->max_bat_voltage_mV = twl6030_get_volimit_config();
-		di->max_charger_current_mA = twl6030_get_vilimit_config();
+		di->charger_voltage_mV = charger_get_volimit_config();
+		di->charger_outcurrent_mA = charger_get_vilimit_config();
 
 		dev_warn(&pdev->dev, "Using limits set by bootloader: %d mV %d mA\n",
-				di->max_bat_voltage_mV, di->max_charger_current_mA);
+				di->charger_voltage_mV, di->charger_outcurrent_mA);
 	} else {
 		/* use the conservative platform data defaults for safety */
-		di->max_bat_voltage_mV = pdata->max_bat_voltage_mV;
-		di->max_charger_current_mA = pdata->max_charger_current_mA;
+		di->charger_voltage_mV = pdata->max_bat_voltage_mV;
+		di->charger_outcurrent_mA = pdata->max_charger_current_mA;
 
-		twl6030_config_limit1_reg(di, pdata->max_charger_voltage_mV);
-		twl6030_config_limit2_reg(di, pdata->max_charger_current_mA);
+		charger_config_limit1_reg(di, pdata->max_charger_voltage_mV);
+		charger_config_limit2_reg(di, pdata->max_charger_current_mA);
 
 		dev_warn(&pdev->dev, "Using default limits: %d mV %d mA\n",
-				di->max_bat_voltage_mV, di->max_charger_current_mA);
+				di->charger_voltage_mV, di->charger_outcurrent_mA);
 	}
 
-	di->charger_voltage_mV = di->max_bat_voltage_mV;
-	di->charger_outcurrent_mA = di->max_charger_current_mA;
+	di->current_limit_mA = 500;
 
 	ret = twl_i2c_write_u8(TWL6030_MODULE_CHARGER, MBAT_TEMP,
 			CONTROLLER_INT_MASK);
@@ -1690,56 +1233,59 @@ static int __devinit twl6030_charger_probe(struct platform_device *pdev)
 		goto init_failed;
 
 
-	twl6030_set_watchdog(di, 32);
+	/* setup the initial watchdog state */
+	di->watchdog_duration = 32;
+	charger_pet_watchdog(di);
 
-	di->nb.notifier_call = twl6030_usb_notifier_call;
-	di->phy = usb_get_phy(USB_PHY_TYPE_USB2);
-	if (di->phy) {
-		ret = usb_register_notifier(di->phy, &di->nb);
-		if (ret)
-			dev_err(&pdev->dev, "phy register notifier failed %d\n", ret);
-	} else
-		dev_err(&pdev->dev, "usb_register_notifier failed %d\n", ret);
+	ret = power_supply_register(dev, &di->usb);
+	if (ret) {
+		dev_err(dev, "failed to register usb power supply\n");
+		goto usb_failed;
+	}
 
-	di->charger_incurrent_mA = 500;
-	if (di->charger_incurrent_mA < 500)
-		di->current_limit_mA = di->charger_incurrent_mA;
-	else
-		di->current_limit_mA = 500;
+	di->notifier.notifier_call = charger_usb_notifier_call;
+	ret = twl6030_usb_register_notifier(&di->notifier);
+	if (ret)
+		dev_err(dev, "twl6030_usb_register_notifier failed %d\n", ret);
 
 	/* request charger fault interrupt */
 	irq = platform_get_irq(pdev, 1);
-	ret = request_threaded_irq(irq, NULL, twl6030_charger_fault_interrupt,
+	ret = request_threaded_irq(irq, NULL, charger_fault_interrupt,
 			0, "twl_charger_fault", di);
 	if (ret) {
-		dev_err(&pdev->dev, "could not request irq %d, status %d\n", irq, ret);
+		dev_err(dev, "could not request irq %d, status %d\n", irq, ret);
 		goto init_failed;
 	}
 
 	/* request charger ctrl interrupt */
 	irq = platform_get_irq(pdev, 0);
-	ret = request_threaded_irq(irq, NULL, twl6030_charger_ctrl_interrupt,
+	ret = request_threaded_irq(irq, NULL, charger_ctrl_interrupt,
 			0, "twl_charger_ctrl", di);
 	if (ret) {
-		dev_err(&pdev->dev, "could not request irq %d, status %d\n", irq, ret);
+		dev_err(dev, "could not request irq %d, status %d\n", irq, ret);
 		goto chg_irq_fail;
 	}
+
+	ret = sysfs_create_group(&dev->kobj, &charger_charger_attr_group);
+	if (ret)
+		dev_err(dev, "could not create sysfs files\n");
+
+	/* setup the led state */
+	di->led = twl6030_init_led_state(di->dev);
+	if (!di->led) {
+		dev_err(dev, "failed to alloc led state\n");
+		goto chg_irq_fail;
+	}
+
+	/* kick ctrl isr to get initial state */
+	charger_ctrl_interrupt(0, di);
 
 	twl6030_interrupt_unmask(TWL6030_CHARGER_CTRL_INT_MASK, REG_INT_MSK_LINE_C);
 	twl6030_interrupt_unmask(TWL6030_CHARGER_CTRL_INT_MASK, REG_INT_MSK_STS_C);
 	twl6030_interrupt_unmask(TWL6030_CHARGER_FAULT_INT_MASK, REG_INT_MSK_LINE_C);
 	twl6030_interrupt_unmask(TWL6030_CHARGER_FAULT_INT_MASK, REG_INT_MSK_STS_C);
 
-	ret = sysfs_create_group(&pdev->dev.kobj, &twl6030_charger_attr_group);
-	if (ret)
-		dev_err(&pdev->dev, "could not create sysfs files\n");
-
-	/* setup the led state */
-	twl6030_init_led_state(di);
-
-	queue_delayed_work(di->wq, &di->monitor_work, 0);
-
-	dev_warn(&pdev->dev, "exit\n");
+	dev_warn(dev, "exit\n");
 	return 0;
 
 	/* TODO: fix fail exit mess */
@@ -1754,7 +1300,7 @@ usb_failed:
 	if (irq != -1)
 		free_irq(irq, di);
 
-	wake_lock_destroy(&usb_wake_lock);
+	wake_lock_destroy(&di->wake_lock);
 	platform_set_drvdata(pdev, NULL);
 	kfree(di);
 
@@ -1762,27 +1308,27 @@ usb_failed:
 	return ret;
 }
 
-#define twl6030_charger_suspend NULL
-#define twl6030_charger_resume NULL
+#define charger_suspend NULL
+#define charger_resume NULL
 
 static const struct dev_pm_ops pm_ops = {
-	.suspend = twl6030_charger_suspend,
-	.resume = twl6030_charger_resume,
+	.suspend = charger_suspend,
+	.resume = charger_resume,
 };
 
-static struct platform_driver twl6030_charger_driver = {
-	.probe = twl6030_charger_probe,
+static struct platform_driver charger_driver = {
+	.probe = charger_probe,
 	.driver = {
 		.name = "twl6030_charger",
 		.pm = &pm_ops,
 	},
 };
 
-static int __init twl6030_charger_init(void)
+static int __init charger_init(void)
 {
-	return platform_driver_register(&twl6030_charger_driver);
+	return platform_driver_register(&charger_driver);
 }
-module_init(twl6030_charger_init);
+module_init(charger_init);
 
 MODULE_LICENSE("GPL");
 MODULE_ALIAS("platform:twl6030_charger");
