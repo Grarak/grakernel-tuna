@@ -2372,7 +2372,7 @@ static void __init notle_reserve(void)
 #endif
     size_t ion_heap_tiler_size = OMAP4_ION_HEAP_TILER_SIZE;
     size_t ion_heap_nonsecure_tiler_size = OMAP4_ION_HEAP_NONSECURE_TILER_SIZE;
-    size_t ion_heap_multimedia_size = SZ_1M * (((ram_size >> 20) > 1024) ? 320 : 180);
+    size_t ion_heap_multimedia_size = SZ_1M * (((ram_size >> 20) > 1024) ? 320 : 165);
 
     // Compute Carve-out addresses
     phys_addr_t smc_addr = DEFAULT_PHYS_ADDR_OFFSET + ram_size - smc_size;
