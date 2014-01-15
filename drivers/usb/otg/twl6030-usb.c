@@ -692,10 +692,14 @@ static int twl6030_notifier_cb(struct notifier_block *nb,
 			return -EINVAL;
 #ifndef CONFIG_TWL6030_USB_DISABLE_VBUS_TYPE_DETECTION
 		charger_type = omap_usb2_charger_detect(&twl->comparator);
+#if 0
 		if (charger_type == POWER_SUPPLY_TYPE_USB_DCP)
 			*supply = POWER_SUPPLY_TYPE_USB_DCP;
 		else
 			*supply = POWER_SUPPLY_TYPE_USB;
+#else
+		*supply = charger_type;
+#endif
 #endif
 		break;
 

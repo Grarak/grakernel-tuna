@@ -240,6 +240,7 @@ static int aess_close(struct snd_pcm_substream *substream)
 
 	if (!--abe->active) {
 		omap_aess_disable_irq(abe->aess);
+		synchronize_irq(abe->irq);
 		abe_pm_save_context(abe);
 		omap_abe_pm_shutdown(platform);
 	} else {

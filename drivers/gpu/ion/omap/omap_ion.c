@@ -108,6 +108,11 @@ static int omap_ion_probe(struct platform_device *pdev)
 		} else if (heap_data->type ==
 				OMAP_ION_HEAP_TYPE_TILER_RESERVATION) {
 			heaps[i] = omap_tiler_heap_create(heap_data);
+		} else if (heap_data->type ==
+				OMAP_ION_HEAP_TYPE_MULTIMEDIA_CARVEOUT) {
+			heap_data->type = ION_HEAP_TYPE_CARVEOUT;
+			heaps[i] = ion_heap_create(heap_data);
+			heaps[i]->type = OMAP_ION_HEAP_TYPE_MULTIMEDIA_CARVEOUT;
 		} else {
 			heaps[i] = ion_heap_create(heap_data);
 		}
@@ -129,6 +134,8 @@ err:
 		if (heaps[i]) {
 			if (heaps[i]->type == OMAP_ION_HEAP_TYPE_TILER)
 				omap_tiler_heap_destroy(heaps[i]);
+			else if (heaps[i]->type == OMAP_ION_HEAP_TYPE_MULTIMEDIA_CARVEOUT)
+				ion_carveout_heap_destroy(heaps[i]);
 			else
 				ion_heap_destroy(heaps[i]);
 		}
@@ -146,6 +153,8 @@ static int omap_ion_remove(struct platform_device *pdev)
 	for (i = 0; i < num_heaps; i++)
 		if (heaps[i]->type == OMAP_ION_HEAP_TYPE_TILER)
 			omap_tiler_heap_destroy(heaps[i]);
+		else if (heaps[i]->type == OMAP_ION_HEAP_TYPE_MULTIMEDIA_CARVEOUT)
+			ion_carveout_heap_destroy(heaps[i]);
 		else
 			ion_heap_destroy(heaps[i]);
 	kfree(heaps);
