@@ -55,6 +55,7 @@ struct pcb_temp_sensor {
 struct pcb_temp_sensor *temp_sensor;
 struct pcb_sens notle_pcb_sensor;
 
+struct workqueue_struct * wq;
 struct delayed_work turn_off_turbo_sprint_mode_work;
 static bool turbo_sprint = false;
 static int debug = 0;
@@ -208,7 +209,7 @@ static void turn_off_turbo_sprint_mode_delay_work_fn(struct work_struct *work)
 	    turbo_sprint = false;
 	}
 	else {
-	    schedule_delayed_work(&turn_off_turbo_sprint_mode_work,
+	    queue_delayed_work(wq, &turn_off_turbo_sprint_mode_work,
 	            msecs_to_jiffies(TURBO_SPRINT_CHECK_PERIOD_MSEC));
 	}
 	mutex_unlock(&turbo_sprint_mode_mutex);
@@ -270,7 +271,7 @@ static ssize_t pcb_temp_set_turbo_sprint_mode(struct device *dev,
 	    getrawmonotonic(&turbo_sprint_mode_starttime);
 
 	    if (!turbo_sprint) {
-	        schedule_delayed_work(&turn_off_turbo_sprint_mode_work,
+	        queue_delayed_work(wq, &turn_off_turbo_sprint_mode_work,
 	                msecs_to_jiffies(TURBO_SPRINT_CHECK_PERIOD_MSEC));
 	        turbo_sprint = true;
 	    }
@@ -350,6 +351,7 @@ static int __devinit pcb_temp_sensor_probe(struct platform_device *pdev)
 	omap4_duty_pcb_register(&notle_pcb_sensor);
 
 	mutex_init(&turbo_sprint_mode_mutex);
+	wq = create_freezable_workqueue(dev_name(&pdev->dev));
 	INIT_DELAYED_WORK(&turn_off_turbo_sprint_mode_work,
 	        turn_off_turbo_sprint_mode_delay_work_fn);
 
@@ -364,6 +366,9 @@ sysfs_create_err:
 static int __devexit pcb_temp_sensor_remove(struct platform_device *pdev)
 {
 	struct pcb_temp_sensor *temp_sensor = platform_get_drvdata(pdev);
+
+	cancel_delayed_work_sync(&turn_off_turbo_sprint_mode_work);
+	destroy_workqueue(wq);
 
 	sysfs_remove_group(&pdev->dev.kobj, &pcb_temp_sensor_group);
 	kobject_uevent(&temp_sensor->dev->kobj, KOBJ_REMOVE);
