@@ -597,6 +597,7 @@ static int __init omap4_duty_register(void)
 	return 0;
 }
 
+#ifndef CONFIG_MACH_NOTLE
 #ifdef CONFIG_PM
 static int omap4_duty_suspend(struct device *dev)
 {
@@ -651,6 +652,9 @@ static const struct dev_pm_ops omap4_duty_dev_pm_ops = {
 };
 
 #define OMAP4_DUTY_PM_OPS (&omap4_duty_dev_pm_ops)
+#else
+#define OMAP4_DUTY_PM_OPS NULL
+#endif
 #else
 #define OMAP4_DUTY_PM_OPS NULL
 #endif

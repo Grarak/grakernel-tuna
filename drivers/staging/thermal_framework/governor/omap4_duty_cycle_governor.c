@@ -329,10 +329,10 @@ static int __init omap4_duty_governor_init(void)
 	t_governor->turbo_sprint_tpcb_sections = turbo_sprint_pcb_sections;
 	t_governor->turbo_sprint_npcb_sections = turbo_sprint_pcb_sections_size;
 	t_governor->working_section = INIT_SECTION;
-
+#ifndef CONFIG_MACH_NOTLE
 	if (register_pm_notifier(&omap4_duty_pm_notifier))
 		pr_err("%s:omap4_duty_gov pm registration failed!\n", __func__);
-
+#endif
 	INIT_DELAYED_WORK(&t_governor->duty_cycle_governor_work,
 			  omap4_duty_governor_delayed_work_fn);
 
