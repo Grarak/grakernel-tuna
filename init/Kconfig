@@ -990,26 +990,13 @@ source "usr/Kconfig"
 
 endif
 
-choice
- prompt "Optimization Level"
-  default CC_OPTIMIZE_DEFAULT
-
 config CC_OPTIMIZE_FOR_SIZE
- bool "Optimize for Size"
- bool "Use -Os"
- help
-  Enabling this option will pass "-Os" instead of "-O2" to gcc
-  resulting in a smaller kernel.
+	bool "Optimize for size"
+	help
+	  Enabling this option will pass "-Os" instead of "-O2" to gcc
+	  resulting in a smaller kernel.
 
-config CC_OPTIMIZE_DEFAULT
- bool "Optimize Default Level"
- bool "Use -O2"
-
-config CC_OPTIMIZE_O3
- bool "Optimize Linaro Max Level"
- bool "Use -O3"
-
-endchoice
+	  If unsure, say Y.
 
 config SYSCTL
 	bool
