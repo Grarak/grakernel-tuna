@@ -598,11 +598,7 @@ struct omap_dss_device panel_notle_device = {
                         .y_res = 360,
                 },
         },
-#ifdef CONFIG_FB_OMAP_BOOTLOADER_INIT
         .skip_init              = true,
-#else
-        .skip_init              = false,
-#endif
 };
 
 static struct omap2_mcspi_device_config ice40_mcspi_config = {
