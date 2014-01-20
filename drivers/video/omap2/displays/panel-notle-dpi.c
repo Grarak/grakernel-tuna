@@ -22,9 +22,11 @@
 #include <linux/crc32.h>
 #include <linux/i2c.h>
 #include <linux/module.h>
+#include <linux/mutex.h>
 #include <linux/slab.h>
 #include <linux/spi/spi.h>
 #include <linux/gpio.h>
+#include <linux/workqueue.h>
 #include <plat/omap_device.h>
 #include <plat/omap_hwmod.h>
 #include <plat/omap-pm.h>
@@ -286,10 +288,50 @@ static void led_config_to_linecuts(struct omap_dss_device *dssdev,
                                    int (*rgbmat)[3]);
 static void fpga_reconfigure(struct notle_drv_data *notle_data);
 
+/* Delayed work to check if FPGA needs reconfiguring */
+#define RECONFIGURE_FPGA_CHECK_INTERVAL (3000) /* msec*/
+struct workqueue_struct * reconfigure_fpga_wq;
+
+typedef struct {
+        struct delayed_work work;
+        struct notle_drv_data *notle_data;
+} reconfigure_fpga_work_struct;
+
+static struct mutex panel_power_lock;
+
+static reconfigure_fpga_work_struct reconfigure_fpga_work;
+
+/* If screen is on, but FPGA is deconfigured for some reason, reconfigure it */
+static void reconfigure_fpga_work_fn(struct work_struct *work) {
+        reconfigure_fpga_work_struct * fpga_work = (reconfigure_fpga_work_struct *) work;
+
+        mutex_lock(&panel_power_lock);
+
+        if (fpga_work->notle_data->enabled
+            && ice40_read_register(ICE40_REVISION) == 0xff) {
+          panel_notle_power_off(fpga_work->notle_data->dssdev);
+          fpga_work->notle_data->dssdev->state = OMAP_DSS_DISPLAY_DISABLED;
+          fpga_reconfigure(fpga_work->notle_data);
+          msleep(100);
+          if (!panel_notle_power_on(fpga_work->notle_data->dssdev)) {
+            fpga_work->notle_data->dssdev->state = OMAP_DSS_DISPLAY_ACTIVE;
+          }
+        }
+
+        mutex_unlock(&panel_power_lock);
+
+        queue_delayed_work(reconfigure_fpga_wq,
+                           (struct delayed_work *)&reconfigure_fpga_work,
+                           msecs_to_jiffies(RECONFIGURE_FPGA_CHECK_INTERVAL));
+}
+
 /* Sysfs interface */
 static ssize_t sysfs_reset(struct notle_drv_data *notle_data,
                            const char *buf, size_t size) {
         int r, value;
+
+        mutex_lock(&panel_power_lock);
+
         panel_notle_power_off(notle_data->dssdev);
         notle_data->dssdev->state = OMAP_DSS_DISPLAY_DISABLED;
 
@@ -302,6 +344,9 @@ static ssize_t sysfs_reset(struct notle_drv_data *notle_data,
         if (!panel_notle_power_on(notle_data->dssdev)) {
           notle_data->dssdev->state = OMAP_DSS_DISPLAY_ACTIVE;
         }
+
+        mutex_unlock(&panel_power_lock);
+
         return size;
 }
 
@@ -377,6 +422,8 @@ static ssize_t enabled_store(struct notle_drv_data *notle_data,
 
         value = !!value;
 
+        mutex_lock(&panel_power_lock);
+
         if (value) {
           if (!panel_notle_power_on(notle_data->dssdev)) {
             notle_data->dssdev->state = OMAP_DSS_DISPLAY_ACTIVE;
@@ -385,6 +432,8 @@ static ssize_t enabled_store(struct notle_drv_data *notle_data,
           panel_notle_power_off(notle_data->dssdev);
           notle_data->dssdev->state = OMAP_DSS_DISPLAY_DISABLED;
         }
+
+        mutex_unlock(&panel_power_lock);
 
         return size;
 }
@@ -1453,6 +1502,7 @@ static void fpga_reconfigure(struct notle_drv_data *notle_data) {
   const struct firmware *fw;
   const char *fpga_img_name = "dss_fpga.img";
   int status;
+
   printk(KERN_INFO LOG_TAG "request_firmware %s ...\n", fpga_img_name);
   status = request_firmware(&fw, fpga_img_name, &(notle_data->dssdev->dev));
   if (status) {
@@ -1586,6 +1636,9 @@ static int panel_notle_power_on(struct omap_dss_device *dssdev) {
               ice40_set_backlight(1, rev, rgbmat);
         }
 
+        queue_delayed_work(reconfigure_fpga_wq,
+                           (struct delayed_work *)&reconfigure_fpga_work,
+                           msecs_to_jiffies(RECONFIGURE_FPGA_CHECK_INTERVAL));
         drv_data->enabled = 1;
         return 0;
 err1:
@@ -1605,6 +1658,8 @@ static void panel_notle_power_off(struct omap_dss_device *dssdev) {
         }
 
         printk(KERN_INFO LOG_TAG "Powering off\n");
+
+        cancel_delayed_work((struct delayed_work*)&reconfigure_fpga_work);
 
         if (!notle_version_supported()) {
               printk(KERN_ERR LOG_TAG "Unsupported Notle version:"
@@ -1657,6 +1712,7 @@ static void panel_notle_power_off(struct omap_dss_device *dssdev) {
 
         omapdss_dpi_display_disable(dssdev);
         drv_data->enabled = 0;
+
 }
 
 static void panel_notle_version_config(int version,
@@ -1714,6 +1770,18 @@ static int panel_notle_probe(struct omap_dss_device *dssdev) {
                 printk(KERN_WARNING LOG_TAG "Failed to create sysfs directory\n");
         }
 
+        printk(KERN_WARNING LOG_TAG "Creating display FPGA reconfigure workueue\n");
+
+        mutex_init(&panel_power_lock);
+        reconfigure_fpga_wq = create_freezable_workqueue(dev_name(&dssdev->dev));
+        INIT_DELAYED_WORK((struct delayed_work*)&reconfigure_fpga_work,
+                           reconfigure_fpga_work_fn);
+        reconfigure_fpga_work.notle_data = drv_data;
+
+        queue_delayed_work(reconfigure_fpga_wq,
+                           (struct delayed_work *)&reconfigure_fpga_work,
+                           msecs_to_jiffies(RECONFIGURE_FPGA_CHECK_INTERVAL));
+
         dev_warn(&dssdev->dev, "panel_notle_probe done\n");
         return 0;
 }
@@ -1727,17 +1795,26 @@ static void __exit panel_notle_remove(struct omap_dss_device *dssdev) {
         kobject_put(&drv_data->kobj);
         kfree(drv_data);
 
+        printk(KERN_WARNING LOG_TAG "Delete display FPGA reconfigure workueue\n");
+
+        cancel_delayed_work((struct delayed_work*)&reconfigure_fpga_work);
+        destroy_workqueue(reconfigure_fpga_wq);
+
         dev_set_drvdata(&dssdev->dev, NULL);
 }
 
 static int panel_notle_enable(struct omap_dss_device *dssdev) {
         int r = 0;
 
+        mutex_lock(&panel_power_lock);
+
         r = panel_notle_power_on(dssdev);
         if (r)
                 return r;
 
         dssdev->state = OMAP_DSS_DISPLAY_ACTIVE;
+
+        mutex_unlock(&panel_power_lock);
 
         return 0;
 }
@@ -1767,25 +1844,38 @@ static int panel_notle_resume(struct omap_dss_device *dssdev) {
                         printk(KERN_ERR LOG_TAG "Failed to set L3 bus speed\n");
         }
 
+        mutex_lock(&panel_power_lock);
+
         r = panel_notle_power_on(dssdev);
         if (r)
                 return r;
 
         dssdev->state = OMAP_DSS_DISPLAY_ACTIVE;
 
+        mutex_unlock(&panel_power_lock);
+
         return 0;
 }
 
 static void panel_notle_disable(struct omap_dss_device *dssdev) {
+
+        mutex_lock(&panel_power_lock);
+
         panel_notle_power_off(dssdev);
 
         dssdev->state = OMAP_DSS_DISPLAY_DISABLED;
+
+        mutex_unlock(&panel_power_lock);
 }
 
 static int panel_notle_suspend(struct omap_dss_device *dssdev) {
-        panel_notle_power_off(dssdev);
 
+        mutex_lock(&panel_power_lock);
+
+        panel_notle_power_off(dssdev);
         dssdev->state = OMAP_DSS_DISPLAY_SUSPENDED;
+
+        mutex_unlock(&panel_power_lock);
 
         /*
          * Release L3 constraint on display off.
