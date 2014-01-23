@@ -455,8 +455,8 @@ static int notle_enable_dpi(struct omap_dss_device *dssdev) {
 }
 
 static void notle_disable_dpi(struct omap_dss_device *dssdev) {
-        omap_mux_set_signal("dpm_emu8.safe_mode", OMAP_PIN_OFF_NONE);
         gpio_set_value(dssdev->reset_gpio, 0);
+        omap_mux_set_signal("dpm_emu8.safe_mode", OMAP_PIN_OFF_NONE);
 }
 
 static int notle_enable_panel(void) {
