@@ -1335,6 +1335,8 @@ static int __devinit charger_probe(struct platform_device *pdev)
 	twl6030_interrupt_unmask(TWL6030_CHARGER_FAULT_INT_MASK, REG_INT_MSK_LINE_C);
 	twl6030_interrupt_unmask(TWL6030_CHARGER_FAULT_INT_MASK, REG_INT_MSK_STS_C);
 
+	charger_update_state(di);
+
 	dev_warn(dev, "exit\n");
 	return 0;
 
