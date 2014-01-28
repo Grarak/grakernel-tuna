@@ -29,6 +29,7 @@
 #include <linux/i2c/twl6030-gpadc.h>
 #include <linux/switch.h>
 #include <linux/usb/omap_usb.h>
+#include <linux/reboot.h>
 #include <sound/soc.h>
 
 #include "board-notle.h"
@@ -75,6 +76,7 @@ struct usb_mux_device_info {
 
 	struct usb_phy* otg;
 	struct notifier_block nb;
+	struct notifier_block reboot_nb;
 
 	struct mutex lock;
 
@@ -213,6 +215,22 @@ static enum usb_mux_mode get_usb_mux_mode(struct usb_mux_device_info *di)
 	mutex_unlock(&di->lock);
 
 	return mode;
+}
+
+/* set mux into floating state right before reboot unless TTY mode is forced */
+static int usb_mux_reboot_notifier_call(struct notifier_block *nb,
+		unsigned long code, void *cmd)
+{
+	struct usb_mux_device_info *di =
+		container_of(nb, struct usb_mux_device_info, reboot_nb);
+
+	if (!di->tty_priority) {
+		dev_info(di->dev, "preparing for reboot, setting mux to float\n");
+		gpio_set_value(di->gpio_cb1, 0);
+		gpio_set_value(di->gpio_cb0, 0);
+	}
+
+	return NOTIFY_DONE;
 }
 
 /*
@@ -628,10 +646,17 @@ static int usb_mux_probe(struct platform_device *pdev)
 		ret = twl6030_usb_register_notifier(&di->nb);
 		if (ret) {
 			dev_err(&pdev->dev, "otg register notifier failed %d\n", ret);
-                        goto error;
+			goto error;
 		}
 	} else {
 		dev_err(&pdev->dev, "otg_get_transceiver failed %d\n", ret);
+		goto error;
+	}
+
+	di->reboot_nb.notifier_call = usb_mux_reboot_notifier_call;
+	ret = register_reboot_notifier(&di->reboot_nb);
+	if (ret) {
+		dev_err(&pdev->dev, "register reboot notifier failed %d\n", ret);
 		goto error;
 	}
 
