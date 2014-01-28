@@ -301,14 +301,12 @@ static int usb_mux_usb_notifier_call(struct notifier_block *nb,
 	bool usb_online = di->usb_online;
 
 	switch (event) {
-		case USB_EVENT_VBUS:
-		case USB_EVENT_ENUMERATED:
-		case USB_EVENT_CHARGER:
-		case USB_EVENT_ID:
+		case TWL6030_USB_EVENT_VBUS_ON:
 			di->usb_online = true;
 			break;
 
-		case USB_EVENT_NONE:
+		case TWL6030_USB_EVENT_VBUS_OFF:
+		case TWL6030_USB_EVENT_OTG_OFF:
 			di->usb_online = false;
 			break;
 	}
