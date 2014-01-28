@@ -42,6 +42,7 @@ struct duty_governor {
 	int npcb_sections;
 	int turbo_sprint_working_session;
 	int turbo_sprint_npcb_sections;
+	struct workqueue_struct *wq;
 	struct delayed_work duty_cycle_governor_work;
 };
 
@@ -59,7 +60,7 @@ static void omap4_duty_schedule(struct duty_governor *t_gov)
 	if (!IS_ERR_OR_NULL(t_gov) &&
 	    !IS_ERR_OR_NULL(t_gov->tpcb) &&
 	    !IS_ERR_OR_NULL(t_gov->tduty))
-		schedule_delayed_work(&t_governor->duty_cycle_governor_work,
+		queue_delayed_work(t_governor->wq, &t_governor->duty_cycle_governor_work,
 				      msecs_to_jiffies(0));
 }
 
@@ -238,12 +239,13 @@ static void omap4_duty_governor_delayed_work_fn(struct work_struct *work)
 			pr_err("%s:update_temp() isn't defined\n", __func__);
 		}
 	}
-	schedule_delayed_work(&t_governor->duty_cycle_governor_work,
+	queue_delayed_work(t_governor->wq, &t_governor->duty_cycle_governor_work,
 			      msecs_to_jiffies(t_governor->period));
 
 	mutex_unlock(&mutex_duty_governor);
 }
 
+#ifndef CONFIG_MACH_NOTLE
 static int omap4_duty_pm_notifier_cb(struct notifier_block *notifier,
 				     unsigned long pm_event, void *unused)
 {
@@ -258,6 +260,7 @@ static int omap4_duty_pm_notifier_cb(struct notifier_block *notifier,
 
 	return NOTIFY_DONE;
 }
+#endif
 
 int omap4_duty_cycle_register(struct duty_cycle *tduty)
 {
@@ -306,9 +309,11 @@ void omap4_duty_turbo_sprint_pcb_section_reg(struct pcb_section *pcb_sect, int s
 	turbo_sprint_pcb_sections_size = sect_size;
 }
 
+#ifndef CONFIG_MACH_NOTLE
 static struct notifier_block omap4_duty_pm_notifier = {
 	.notifier_call = omap4_duty_pm_notifier_cb,
 };
+#endif
 
 static int __init omap4_duty_governor_init(void)
 {
@@ -329,10 +334,11 @@ static int __init omap4_duty_governor_init(void)
 	t_governor->turbo_sprint_tpcb_sections = turbo_sprint_pcb_sections;
 	t_governor->turbo_sprint_npcb_sections = turbo_sprint_pcb_sections_size;
 	t_governor->working_section = INIT_SECTION;
-
+#ifndef CONFIG_MACH_NOTLE
 	if (register_pm_notifier(&omap4_duty_pm_notifier))
 		pr_err("%s:omap4_duty_gov pm registration failed!\n", __func__);
-
+#endif
+	t_governor->wq = create_freezable_workqueue("omap4_duty_governor");
 	INIT_DELAYED_WORK(&t_governor->duty_cycle_governor_work,
 			  omap4_duty_governor_delayed_work_fn);
 
@@ -342,6 +348,7 @@ static int __init omap4_duty_governor_init(void)
 static void __exit omap4_duty_governor_exit(void)
 {
 	cancel_delayed_work_sync(&t_governor->duty_cycle_governor_work);
+	destroy_workqueue(t_governor->wq);
 	kfree(t_governor);
 }
 

@@ -549,6 +549,7 @@ static int twl6030_usb_ldo_init(struct twl6030_usb *twl)
 	twl6030_enable_ldo_input_supply(twl, false);
 #else
 	twl6030_enable_ldo_input_supply(twl, true);
+	regulator_enable(twl->usb3v3);
 #endif
 
 	return 0;

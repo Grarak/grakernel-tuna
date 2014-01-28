@@ -31,6 +31,7 @@
 #include <linux/usb/omap_usb.h>
 #include <asm/div64.h>
 #include <linux/reboot.h>
+#include <linux/switch.h>
 
 #define CONTROLLER_INT_MASK               0x00
 #define CONTROLLER_CTRL1                  0x01
@@ -290,13 +291,15 @@ struct charger_info {
 	/* limiting condition flags; protected by mutex */
 	int charge_disabled;
 	int temperature_lockout;
-	int invalid_charger;
 	int battery_full;
 
 	/* usb state; protected by mutex */
 	int vbus_online;
 	int usb_online;
 	int otg_online;
+
+	/* informational state; protected by mutex */
+	int invalid_charger;
 
 	enum power_supply_type charger_supply_type;
 	unsigned long usb_event;
@@ -306,6 +309,10 @@ struct charger_info {
 
 	/* charge control irq state */
 	u8 charge_control_state;
+
+	/* charge fault irq state */
+	u8 charge_fault_int1;
+	u8 charge_fault_int2;
 
 	/* power led state */
 	struct twl6030_led_state *led;
@@ -324,6 +331,8 @@ struct charger_info {
 
 	struct wake_lock wake_lock;
 	struct mutex mutex;
+
+	struct switch_dev sdev;
 };
 
 struct twl6030_led_state *twl6030_init_led_state(struct device *dev);
@@ -694,6 +703,9 @@ static irqreturn_t charger_ctrl_interrupt(int irq, void *_di)
 		di->vbus_online = 0;
 		di->otg_online = 0;
 
+		di->invalid_charger = 0;
+		switch_set_state(&di->sdev, 0);
+
 		charger_unlock(di);
 
 		charger_update_state(di);
@@ -728,27 +740,58 @@ static irqreturn_t charger_fault_interrupt(int irq, void *_di)
 	struct charger_info *di = _di;
 	int ret;
 
-	u8 usb_charge_sts, usb_charge_sts1, usb_charge_sts2;
+	u8 reg_stat, reg_int1, reg_int2;
+	u8 int1_toggle, int2_toggle;
+	u8 int1_set, int2_set;
+	u8 int1_reset, int2_reset;
+	u8 charge_fault_int1, charge_fault_int2;
 
-	ret = twl_i2c_read_u8(TWL6030_MODULE_CHARGER, &usb_charge_sts,
+	ret = twl_i2c_read_u8(TWL6030_MODULE_CHARGER, &reg_stat,
 						CHARGERUSB_INT_STATUS);
 	if (ret)
 		goto err;
 
-	ret = twl_i2c_read_u8(TWL6030_MODULE_CHARGER, &usb_charge_sts1,
+	ret = twl_i2c_read_u8(TWL6030_MODULE_CHARGER, &reg_int1,
 						CHARGERUSB_STATUS_INT1);
 	if (ret)
 		goto err;
 
-	ret = twl_i2c_read_u8(TWL6030_MODULE_CHARGER, &usb_charge_sts2,
+	ret = twl_i2c_read_u8(TWL6030_MODULE_CHARGER, &reg_int2,
 						CHARGERUSB_STATUS_INT2);
 	if (ret)
 		goto err;
 
-	dev_warn(di->dev, "CHARGE FAULT IRQ: STS %02x INT1 %02x INT2 %02x\n",
-			usb_charge_sts, usb_charge_sts1, usb_charge_sts2);
+	charge_fault_int1 = di->charge_fault_int1;
+	charge_fault_int2 = di->charge_fault_int2;
+
+	int1_toggle = charge_fault_int1 ^ reg_int1;
+	int2_toggle = charge_fault_int2 ^ reg_int2;
+
+	int1_set = int1_toggle & reg_int1;
+	int2_set = int2_toggle & reg_int2;
+
+	int1_reset = int1_toggle & charge_fault_int1;
+	int2_reset = int2_toggle & charge_fault_int2;
+
+	di->charge_fault_int1 = reg_int1;
+	di->charge_fault_int2 = reg_int2;
+
+	dev_dbg(di->dev, "%s: int1_set=%02x int1_reset=%02x int2_set=%02x int2_reset=%02x\n",
+			__func__, int1_set, int1_reset, int2_set, int2_reset);
+
+	if ((int1_set & (CHARGERUSB_STATUS_INT1_POOR_SRC | CHARGERUSB_STATUS_INT1_SLP_MODE))
+			|| (int2_set & (CURRENT_TERM | ANTICOLLAPSE))) {
+		charger_lock(di);
+
+		di->invalid_charger = 1;
+		switch_set_state(&di->sdev, 1);
+
+		charger_unlock(di);
+
+		charger_update_state(di);
+	}
+
 err:
-	charger_update_state(di);
 	return IRQ_HANDLED;
 }
 
@@ -976,7 +1019,7 @@ static void charger_work(struct work_struct *work)
 
 	/* aggregate limiting factors */
 	limiting_active = di->battery_full || di->charge_disabled ||
-		di->temperature_lockout || di->invalid_charger;
+		di->temperature_lockout;
 
 	/* hardware ready for charging? */
 	charge_source = di->vbus_online && !di->otg_online;
@@ -1266,6 +1309,13 @@ static int __devinit charger_probe(struct platform_device *pdev)
 		goto chg_irq_fail;
 	}
 
+	di->sdev.name = "invalid_charger";
+	ret = switch_dev_register(&di->sdev);
+	if (ret) {
+		dev_err(di->dev, "error registering switch device: %d\n", ret);
+		goto chg_irq_fail;
+	}
+
 	ret = sysfs_create_group(&dev->kobj, &charger_charger_attr_group);
 	if (ret)
 		dev_err(dev, "could not create sysfs files\n");
@@ -1284,6 +1334,8 @@ static int __devinit charger_probe(struct platform_device *pdev)
 	twl6030_interrupt_unmask(TWL6030_CHARGER_CTRL_INT_MASK, REG_INT_MSK_STS_C);
 	twl6030_interrupt_unmask(TWL6030_CHARGER_FAULT_INT_MASK, REG_INT_MSK_LINE_C);
 	twl6030_interrupt_unmask(TWL6030_CHARGER_FAULT_INT_MASK, REG_INT_MSK_STS_C);
+
+	charger_update_state(di);
 
 	dev_warn(dev, "exit\n");
 	return 0;

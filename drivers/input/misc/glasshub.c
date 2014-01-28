@@ -132,6 +132,7 @@
 #define FLAG_SYSFS_CREATED		3
 #define FLAG_DEVICE_DISABLED		4
 #define FLAG_WINK_FLAG_ENABLE		5
+#define FLAG_DEVICE_SUSPENDED		6
 #define FLAG_DEVICE_MAY_BE_WEDGED	31
 
 /* flags for device permissions */
@@ -579,6 +580,14 @@ static irqreturn_t glasshub_irq_handler(int irq, void *dev_id)
 
 	/* if threaded handler is already scheduled, don't schedule it again */
 	if (test_and_set_bit(FLAG_WAKE_THREAD, &glasshub->flags)) goto Handled;
+
+	/* if device is suspended, ignore it until resumed */
+	if (test_bit(FLAG_DEVICE_SUSPENDED, &glasshub->flags)) {
+		dev_warn(&glasshub->i2c_client->dev,
+				"%s: IRQ rx'd in suspend ignored\n",
+				__FUNCTION__);
+		goto Handled;
+	}
 
 	/* save timestamp for threaded handler and schedule it */
 	glasshub->irq_timestamp = read_robust_clock();
@@ -2360,6 +2369,32 @@ err_out:
 	return -ENODEV;
 }
 
+/* hack to get around IRQ during suspend issue */
+#ifdef CONFIG_PM
+static int glasshub_resume_noirq(struct device *dev)
+{
+	struct glasshub_data *glasshub = dev_get_drvdata(dev);
+	clear_bit(FLAG_DEVICE_SUSPENDED, &glasshub->flags);
+	return 0;
+}
+
+static int glasshub_suspend_noirq(struct device *dev)
+{
+	struct glasshub_data *glasshub = dev_get_drvdata(dev);
+	set_bit(FLAG_DEVICE_SUSPENDED, &glasshub->flags);
+	return 0;
+}
+
+static const struct dev_pm_ops glasshub_pmops = {
+	.suspend_noirq = glasshub_suspend_noirq,
+	.resume_noirq = glasshub_resume_noirq,
+};
+#define GLASSHUB_PMOPS (&glasshub_pmops)
+#else
+#define GLASSHUB_PMOPS NULL
+#endif /* CONFIG_PM */
+
+
 static const struct i2c_device_id glasshub_id[] = {
 	{ DEVICE_NAME, 0 },
 };
@@ -2370,6 +2405,7 @@ static struct i2c_driver glasshub_driver = {
 	.driver = {
 		.owner = THIS_MODULE,
 		.name = DEVICE_NAME,
+		.pm = GLASSHUB_PMOPS,
 	},
 };
 

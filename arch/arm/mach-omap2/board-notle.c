@@ -455,8 +455,8 @@ static int notle_enable_dpi(struct omap_dss_device *dssdev) {
 }
 
 static void notle_disable_dpi(struct omap_dss_device *dssdev) {
-        omap_mux_set_signal("dpm_emu8.safe_mode", OMAP_PIN_OFF_NONE);
         gpio_set_value(dssdev->reset_gpio, 0);
+        omap_mux_set_signal("dpm_emu8.safe_mode", OMAP_PIN_OFF_NONE);
 }
 
 static int notle_enable_panel(void) {
@@ -598,11 +598,7 @@ struct omap_dss_device panel_notle_device = {
                         .y_res = 360,
                 },
         },
-#ifdef CONFIG_FB_OMAP_BOOTLOADER_INIT
         .skip_init              = true,
-#else
-        .skip_init              = false,
-#endif
 };
 
 static struct omap2_mcspi_device_config ice40_mcspi_config = {
