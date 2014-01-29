@@ -1327,6 +1327,7 @@ void omap_kexec_hardboot(void)
      * not support the hardboot jump. */
     arm_pm_restart('c', NULL);
 }
+#endif
 
 #ifdef CONFIG_CPU_FREQ_GOV_ONDEMAND_2_PHASE
 int set_two_phase_freq(int cpufreq);
