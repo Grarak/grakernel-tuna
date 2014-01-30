@@ -327,7 +327,7 @@ static enum power_supply_property bq27x00_battery_props[] = {
 
 static unsigned int debug_dataflash_interval = 20*60*1000;
 
-static unsigned int poll_interval = 360;
+static unsigned int poll_interval = 15;
 module_param(poll_interval, uint, 0644);
 MODULE_PARM_DESC(poll_interval, "battery poll interval in seconds - " \
 				"0 disables polling");
@@ -502,6 +502,8 @@ static void bq27x00_update(struct bq27x00_device_info *di)
 	unsigned char block_addr;
 	int block_len;
 	struct timespec ts;
+	int count;
+	char dr_buf[200];
 
 	cache.flags = bq27x00_read(di, BQ27x00_REG_FLAGS, false);
 
@@ -575,48 +577,96 @@ static void bq27x00_update(struct bq27x00_device_info *di)
 			di->charge_design_full = bq27x00_battery_read_ilmd(di);
 	}
 
+	/* Dumps out Data Ram Info */
+	count = scnprintf(dr_buf,sizeof(dr_buf),
+	       "bq27x00 Ex DR: %ld.%ld,"
+	       "0x%04x,%d,%d,0x%04x,%d,%d,%d,%d,%d,%d%%,"
+	       "0x%02x,%d,%d%%,%d,%d,%d,%d,%d,%d%%,%d,%d,%u,%d",
+	       cache.timestamp.tv_sec,
+	       cache.timestamp.tv_nsec/100000000,
+	       cache.control,
+	       cache.temperature-2732,
+	       cache.voltage,
+	       cache.flags,
+	       cache.nom_avail_cap,
+	       cache.full_avail_cap,
+	       cache.remain_cap,
+	       cache.full_charge_cap,
+	       (short)cache.average_i,
+	       (cache.state_of_health & 0x00FF),
+	       (cache.state_of_health & 0xFF00) >> 8,
+	       cache.cycle_count,
+	       cache.capacity,
+	       (short)cache.instant_i,
+	       cache.internal_temp-2732,
+	       cache.r_scale,
+	       cache.true_cap,
+	       cache.true_fcc,
+	       cache.true_soc,
+	       cache.q_max,
+	       cache.q_passed,
+	       cache.DOD0,
+	       cache.q_start);
+
+	/* For Version 0x604, there is some extra info */
+	if ( di->fw_ver >= L1_604_FW_VERSION ) {
+		scnprintf(dr_buf+count, sizeof(dr_buf)-count,
+			",%d,%u,%u,0x%04x,0x%04x,%d,%d,%u,%d,%d,%d,%u,%d",
+			cache.delta_v,
+			cache.DODfinal,
+			cache.max_current,
+			cache.q_passed_hires_int,
+			cache.q_passed_hires_fraction,
+			cache.max_dod_diff,
+			cache.ambient_temp,
+			cache.regr_dod,
+			cache.regr_res,
+			cache.rnew,
+			cache.dod_diff,
+			cache.sleeptime,
+			cache.sim_temp);
+
+	}
+
+	printk("%s\n", dr_buf);
+
 	/*
-	 * For debugging use if debug_print_interval is non zero.
+	 * Selectively records Data Flash and Data Ram periodically.
+	 * These cached values are dumped out on sysfs read.
 	 */
-	if (di->debug_print_interval > 0) {
-		int count;
-		char dr_buf[200];
+	if(time_after_eq(jiffies,di->data_flash_update_time)) {
+		count = scnprintf(di->partial_df.data_ram,
+			sizeof(di->partial_df.data_ram),
+			"0x%04x %d %d 0x%04x %d %d %d %d %d %d "
+			"0x%02x %d %d %d %d %d %d %d %d %d %d %u %d",
+			cache.control,
+			cache.temperature-2732,
+			cache.voltage,
+			cache.flags,
+			cache.nom_avail_cap,
+			cache.full_avail_cap,
+			cache.remain_cap,
+			cache.full_charge_cap,
+			(short)cache.average_i,
+			(cache.state_of_health & 0x00FF),
+			(cache.state_of_health & 0xFF00) >> 8,
+			cache.cycle_count,
+			cache.capacity,
+			(short)cache.instant_i,
+			cache.internal_temp-2732,
+			cache.r_scale,
+			cache.true_cap,
+			cache.true_fcc,
+			cache.true_soc,
+			cache.q_max,
+			cache.q_passed,
+			cache.DOD0,
+			cache.q_start);
 
-		/* Dumps out Data Ram Info */
-		count = scnprintf(dr_buf,sizeof(dr_buf),
-		       "bq27x00 Ex DR: %ld.%ld,"
-		       "0x%04x,%d,%d,0x%04x,%d,%d,%d,%d,%d,%d%%,"
-		       "0x%02x,%d,%d%%,%d,%d,%d,%d,%d,%d%%,%d,%d,%u,%d",
-		       cache.timestamp.tv_sec,
-		       cache.timestamp.tv_nsec/100000000,
-		       cache.control,
-		       cache.temperature-2732,
-		       cache.voltage,
-		       cache.flags,
-		       cache.nom_avail_cap,
-		       cache.full_avail_cap,
-		       cache.remain_cap,
-		       cache.full_charge_cap,
-		       (short)cache.average_i,
-		       (cache.state_of_health & 0x00FF),
-		       (cache.state_of_health & 0xFF00) >> 8,
-		       cache.cycle_count,
-		       cache.capacity,
-		       (short)cache.instant_i,
-		       cache.internal_temp-2732,
-		       cache.r_scale,
-		       cache.true_cap,
-		       cache.true_fcc,
-		       cache.true_soc,
-		       cache.q_max,
-		       cache.q_passed,
-		       cache.DOD0,
-		       cache.q_start);
-
-		/* For Version 0x604, there is some extra info */
 		if ( di->fw_ver >= L1_604_FW_VERSION ) {
-			scnprintf(dr_buf+count, sizeof(dr_buf)-count,
-				",%d,%u,%u,0x%04x,0x%04x,%d,%d,%u,%d,%d,%d,%u,%d",
+			scnprintf(di->partial_df.data_ram+count,
+				sizeof(di->partial_df.data_ram)-count,
+				" %d %u %u 0x%04x 0x%04x %d %d %u %d %d %d %u %d",
 				cache.delta_v,
 				cache.DODfinal,
 				cache.max_current,
@@ -633,65 +683,9 @@ static void bq27x00_update(struct bq27x00_device_info *di)
 
 		}
 
-		printk("%s\n", dr_buf);
-
-		/*
-		 * Selectively records Data Flash and Data Ram periodically.
-		 * These cached values are dumped out on sysfs read.
-		 */
-		if(time_after_eq(jiffies,di->data_flash_update_time)) {
-			count = scnprintf(di->partial_df.data_ram,
-				sizeof(di->partial_df.data_ram),
-				"0x%04x %d %d 0x%04x %d %d %d %d %d %d "
-				"0x%02x %d %d %d %d %d %d %d %d %d %d %u %d",
-				cache.control,
-				cache.temperature-2732,
-				cache.voltage,
-				cache.flags,
-				cache.nom_avail_cap,
-				cache.full_avail_cap,
-				cache.remain_cap,
-				cache.full_charge_cap,
-				(short)cache.average_i,
-				(cache.state_of_health & 0x00FF),
-				(cache.state_of_health & 0xFF00) >> 8,
-				cache.cycle_count,
-				cache.capacity,
-				(short)cache.instant_i,
-				cache.internal_temp-2732,
-				cache.r_scale,
-				cache.true_cap,
-				cache.true_fcc,
-				cache.true_soc,
-				cache.q_max,
-				cache.q_passed,
-				cache.DOD0,
-				cache.q_start);
-
-			if ( di->fw_ver >= L1_604_FW_VERSION ) {
-				scnprintf(di->partial_df.data_ram+count,
-					sizeof(di->partial_df.data_ram)-count,
-					" %d %u %u 0x%04x 0x%04x %d %d %u %d %d %d %u %d",
-					cache.delta_v,
-					cache.DODfinal,
-					cache.max_current,
-					cache.q_passed_hires_int,
-					cache.q_passed_hires_fraction,
-					cache.max_dod_diff,
-					cache.ambient_temp,
-					cache.regr_dod,
-					cache.regr_res,
-					cache.rnew,
-					cache.dod_diff,
-					cache.sleeptime,
-					cache.sim_temp);
-
-			}
-
-			bq27x00_dump_partial_dataflash(di);
-			di->data_flash_update_time =
-				jiffies + msecs_to_jiffies(debug_dataflash_interval);
-		}
+		bq27x00_dump_partial_dataflash(di);
+		di->data_flash_update_time =
+			jiffies + msecs_to_jiffies(debug_dataflash_interval);
 	}
 
 	/* Ignore current_now which is a snapshot of the current battery state
@@ -711,7 +705,9 @@ static void bq27x00_battery_poll(struct work_struct *work)
 		container_of(work, struct bq27x00_device_info, work.work);
 
 	if (poll_interval > 0) {
+		mutex_lock(&di->lock);
 		bq27x00_update(di);
+		mutex_unlock(&di->lock);
 		/* The timer does not have to be accurate. */
 		set_timer_slack(&di->work.timer, poll_interval * HZ / 4);
 		queue_delayed_work(system_freezable_wq, &di->work, poll_interval * HZ);
@@ -785,27 +781,10 @@ static int bq27x00_battery_current(struct bq27x00_device_info *di,
 {
 	int curr;
 
-	if (di->chip == BQ27500)
-	    curr = bq27x00_read(di, BQ27x00_REG_AI, false);
-	else
-	    curr = di->cache.current_now;
+	curr = bq27x00_read(di, BQ27x00_REG_AI, false);
 
-#if 0
-	if (curr < 0)
-		return curr;
-#endif
-
-	if (di->chip == BQ27500) {
-		/* bq27500 returns signed value */
-		val->intval = (int)((s16)curr) * 1000;
-	} else {
-		if (di->cache.flags & BQ27000_FLAG_CHGS) {
-			dev_dbg(di->dev, "negative current!\n");
-			curr = -curr;
-		}
-
-		val->intval = curr * 3570 / BQ27000_RS;
-	}
+	/* bq27500 returns signed value */
+	val->intval = (int)((s16)curr) * 1000;
 
 	return 0;
 }
@@ -947,14 +926,11 @@ static int bq27x00_battery_get_property(struct power_supply *psy,
 	struct bq27x00_device_info *di = to_bq27x00_device_info(psy);
 
 	mutex_lock(&di->lock);
-	if (time_is_before_jiffies(di->last_update + 5 * HZ)) {
-		cancel_delayed_work_sync(&di->work);
-		bq27x00_battery_poll(&di->work.work);
-	}
-	mutex_unlock(&di->lock);
 
-	if (psp != POWER_SUPPLY_PROP_PRESENT && di->cache.flags < 0)
+	if (psp != POWER_SUPPLY_PROP_PRESENT && di->cache.flags < 0) {
+		mutex_unlock(&di->lock);
 		return -ENODEV;
+	}
 
 	switch (psp) {
 	case POWER_SUPPLY_PROP_STATUS:
@@ -1014,8 +990,11 @@ static int bq27x00_battery_get_property(struct power_supply *psy,
 		ret = bq27x00_battery_energy(di, val);
 		break;
 	default:
+		mutex_unlock(&di->lock);
 		return -EINVAL;
 	}
+
+	mutex_unlock(&di->lock);
 
 	return ret;
 }
@@ -1140,11 +1119,14 @@ static int bq27x00_powersupply_init(struct bq27x00_device_info *di)
 
 	dev_info(di->dev, "support ver. %s enabled\n", DRIVER_VERSION);
 
-	/* If debug is enabled, force a DR and DF dump on boot */
-	if (di->debug_print_interval > 0)
-		di->data_flash_update_time = jiffies;
+	/* Force a DR and DF dump on boot */
+	di->data_flash_update_time = jiffies;
+
+	mutex_lock(&di->lock);
 
 	bq27x00_update(di);
+
+	mutex_unlock(&di->lock);
 
 	return 0;
 }
@@ -1920,7 +1902,7 @@ static int bq27x00_battery_probe(struct i2c_client *client,
 	di->bat.name = name;
 	di->bus.read = &bq27x00_read_i2c;
 	di->bus.write = &bq27x00_write_i2c;
-	di->debug_print_interval = DEBUG_1HZ_MAX_COUNT;
+	di->debug_print_interval = 0;
 	di->debug_index = 0;
 
 	if (pdata && pdata->translate_temp)
@@ -1968,6 +1950,10 @@ static int bq27x00_battery_probe(struct i2c_client *client,
 		queue_delayed_work(system_freezable_wq, &di->debug_work, 0);
 		di->data_flash_update_time =
 			jiffies + msecs_to_jiffies(debug_dataflash_interval);
+	}
+
+	if (poll_interval > 0) {
+		queue_delayed_work(system_freezable_wq, &di->work, 0);
 	}
 
 	return 0;
@@ -2040,16 +2026,12 @@ static int bq27x00_battery_suspend_resume(struct i2c_client *client, const char 
 		return -EINVAL;
 	}
 
-	mutex_lock(&di->lock);
+	if(!mutex_trylock(&di->lock)) {
+		dev_err(di->dev,"Gas gauge active.\n");
+		return -EBUSY;
+	}
 
 	ret = bq27x00_battery_dump_qpassed(di, buf, sizeof(buf));
-
-	if (di->debug_print_interval > 0) {
-		if (suspend_resume == SUSPEND_STR)
-			cancel_delayed_work_sync(&di->work);
-		else if (suspend_resume == RESUME_STR)
-			queue_delayed_work(system_freezable_wq, &di->debug_work, HZ);
-	}
 
 	mutex_unlock(&di->lock);
 
