@@ -595,7 +595,7 @@ static struct omap_hwmod_mux_info *
 setup_4430ehci_io_mux(const enum usbhs_omap_port_mode *port_mode)
 {
 	struct omap_device_pad *pads;
-	int pads_cnt;
+	int pads_cnt = 0;
 
 	switch (port_mode[0]) {
 	case OMAP_EHCI_PORT_MODE_PHY:
