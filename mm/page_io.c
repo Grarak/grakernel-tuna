@@ -175,7 +175,6 @@ int __swap_writepage(struct page *page, struct writeback_control *wbc,
 {
 	struct bio *bio;
 	int ret = 0, rw = WRITE;
-	struct swap_info_struct *sis = page_swap_info(page);
 	bio = get_swap_bio(GFP_NOIO, page, end_write_func);
 	if (bio == NULL) {
 		set_page_dirty(page);
