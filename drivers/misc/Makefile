@@ -57,7 +57,6 @@ obj-$(CONFIG_SEC_MODEM)		+= modem_if/
 obj-$(CONFIG_USB_SWITCH_FSA9480)	+= fsa9480.o
 obj-$(CONFIG_OMAP_DIE_TEMP_SENSOR)	+= omap_temp_sensor.o
 obj-$(CONFIG_LEDS_AN30259A)	+= leds-an30259a.o
-obj-$(CONFIG_FSYNC_CONTROL)	+= fsync_control.o
 obj-$(CONFIG_SOUND_CONTROL)	+= sound_control.o
 obj-$(CONFIG_CUSTOM_VOLTAGE)	+= custom_voltage.o
 obj-$(CONFIG_COLOR_CONTROL)	+= color_control.o
