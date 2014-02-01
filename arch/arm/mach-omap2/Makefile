@@ -32,7 +32,6 @@ obj-$(CONFIG_ARCH_OMAP4)		+= omap4-common.o \
 					   omap-wakeupgen.o
 
 plus_sec := $(call as-instr,.arch_extension sec,+sec)
-<<<<<<< HEAD
 AFLAGS_omap-headsmp.o			:=-Wa,-march=armv7-a$(plus_sec)
 AFLAGS_omap-smc.o			:=-Wa,-march=armv7-a$(plus_sec)
 
