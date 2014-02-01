@@ -2026,8 +2026,6 @@ static void __exit cpufreq_gov_dbs_exit(void)
 
 	cpufreq_unregister_governor(&cpufreq_gov_intellidemand);
 	for_each_possible_cpu(i) {
-		struct cpu_dbs_info_s *this_dbs_info =
-			&per_cpu(id_cpu_dbs_info, i);
 		mutex_destroy(&this_dbs_info->timer_mutex);
 	}
 #ifdef CONFIG_EARLYSUSPEND
