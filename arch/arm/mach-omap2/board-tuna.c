@@ -268,7 +268,7 @@ static struct platform_device tuna_gpio_i2c5_device = {
 #define PHYS_ADDR_SMC_SIZE			(SZ_1M * 3)
 #define PHYS_ADDR_DUCATI_SIZE			(SZ_1M * 105)
 #define OMAP_TUNA_ION_HEAP_SECURE_INPUT_SIZE	(SZ_1M * 90)
-#define OMAP_TUNA_ION_HEAP_TILER_SIZE		(SZ_1M * 81)
+#define OMAP_TUNA_ION_HEAP_TILER_SIZE		(SZ_1M * 61)
 #define OMAP_TUNA_ION_HEAP_NONSECURE_TILER_SIZE	(SZ_1M * 15)
 
 #define PHYS_ADDR_SMC_MEM	(0x80000000 + SZ_1G - PHYS_ADDR_SMC_SIZE)
@@ -1476,7 +1476,7 @@ static void __init tuna_reserve(void)
 {
 	int i;
 	int ret;
-    unsigned long real_start, real_size;
+	unsigned long real_start, real_size;
 
 	/* do the static reservations first */
 	memblock_remove(PHYS_ADDR_SMC_MEM, PHYS_ADDR_SMC_SIZE);
@@ -1484,18 +1484,18 @@ static void __init tuna_reserve(void)
 
 	for (i = 0; i < tuna_ion_data.nr; i++)
 		if (tuna_ion_data.heaps[i].type == ION_HEAP_TYPE_CARVEOUT ||
-		    tuna_ion_data.heaps[i].type == OMAP_ION_HEAP_TYPE_TILER) {
+			tuna_ion_data.heaps[i].type == OMAP_ION_HEAP_TYPE_TILER) {
             
-            // Register an extra 1M before ramconsole to store kexec stuff
-            real_start = tuna_ion_data.heaps[i].base - SZ_1M;
-            real_size = tuna_ion_data.heaps[i].size + SZ_1M;
+			// Register an extra 1M before ramconsole to store kexec stuff
+			real_start = tuna_ion_data.heaps[i].base - SZ_1M;
+			real_size = tuna_ion_data.heaps[i].size + SZ_1M;
             
-            ret = memblock_remove(real_start, real_size);
+			ret = memblock_remove(real_start, real_size);
             
 			if (ret)
 				pr_err("memblock remove of %x@%lx failed\n",
-				       tuna_ion_data.heaps[i].size,
-				       tuna_ion_data.heaps[i].base);
+					tuna_ion_data.heaps[i].size,
+					tuna_ion_data.heaps[i].base);
 		}
 
 	/* ipu needs to recognize secure input buffer area as well */
