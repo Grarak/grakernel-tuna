@@ -24,6 +24,7 @@ ccflags-y += \
 	-DPVR_NO_OMAP_TIMER \
 	-DSYS_SUPPORTS_SGX_IDLE_CALLBACK \
 	-DPVRSRV_REFCOUNT_DEBUG \
+	-O3 \
 	-Idrivers/gpu/pvr/sgx
 
 ccflags-$(CONFIG_PVR_SGXCORE_540) += \
