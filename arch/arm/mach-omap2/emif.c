@@ -1220,15 +1220,6 @@ static void init_temperature(u32 emif_nr)
 			 "limit.. Needs shut down!!!", emif_nr + 1);
 }
 
-static void __init emif_setup_errata(void)
-{
-	if (cpu_is_omap44xx())
-		emif_errata |= EMIF_ERRATUM_SR_TIMER_i735;
-
-	if (cpu_is_omap443x() || cpu_is_omap446x())
-		emif_errata |= EMIF_ERRATUM_POWER_DOWN_NOT_EFFICIENT_i743;
-}
-
 /*
  * omap_emif_device_init needs to be done before
  * ddr reconfigure function call.
