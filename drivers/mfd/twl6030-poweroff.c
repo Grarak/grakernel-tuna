@@ -35,6 +35,24 @@
 #define CON_DEVOFF	(1<<1)
 #define MOD_DEVOFF	(1<<2)
 
+#define LED_PWM_CTRL1 0x14
+#define LED_PWM_CTRL2 0x15
+
+#define LED_PWM_ON 0x1
+
+static void twl6030_enable_power_led(void)
+{
+	u8 oldval = 0;
+
+	/* set LED intensity to full */
+	twl_i2c_write_u8(TWL6030_MODULE_CHARGER, 0xff, LED_PWM_CTRL1);
+
+	/* enable LED independently from charger state */
+	twl_i2c_read_u8(TWL6030_MODULE_CHARGER, &oldval, LED_PWM_CTRL2);
+	oldval = (oldval & 0xfc) | LED_PWM_ON;
+	twl_i2c_write_u8(TWL6030_MODULE_CHARGER, oldval, LED_PWM_CTRL2);
+}
+
 void twl6030_poweroff(void)
 {
 	u8 val = 0;
@@ -69,6 +87,7 @@ void twl6030_poweroff(void)
 static int __init twl6030_poweroff_init(void)
 {
 	pm_power_off = twl6030_poweroff;
+	pm_power_off_prepare = twl6030_enable_power_led;
 
 	return 0;
 }
@@ -76,6 +95,7 @@ static int __init twl6030_poweroff_init(void)
 static void __exit twl6030_poweroff_exit(void)
 {
 	pm_power_off = NULL;
+	pm_power_off_prepare = NULL;
 }
 
 module_init(twl6030_poweroff_init);
