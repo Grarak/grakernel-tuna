@@ -2003,14 +2003,14 @@ static struct omap_board_mux evt2_board_mux[] __initdata = {
 };
 // EVT2 WakeUp:
 static struct omap_board_mux evt2_board_wkup_mux[] __initdata = {
-    OMAP4_MUX(SIM_IO,               OMAP_MUX_MODE3 | OMAP_PIN_INPUT | OMAP_WAKEUP_EN),  // BCM_WLAN_HOST_WAKE
+    OMAP4_MUX(SIM_IO,               OMAP_MUX_MODE3 | OMAP_PIN_INPUT | OMAP_WAKEUP_EN),           // BCM_WLAN_HOST_WAKE
     OMAP4_MUX(FREF_CLK3_REQ,        OMAP_MUX_MODE3 | OMAP_PIN_INPUT_PULLUP | OMAP_WAKEUP_EN),    // CAMERA, TOP_SW
     OMAP4_MUX(SIM_CD,               OMAP_MUX_MODE3 | OMAP_PIN_INPUT_PULLUP | OMAP_WAKEUP_EN),    // TOUCHPAD_INT_N
     OMAP4_MUX(SIM_CLK,              OMAP_MUX_MODE3 | OMAP_PIN_INPUT_PULLUP),                     // BLINK_INT
     OMAP4_MUX(SIM_PWRCTRL,          OMAP_MUX_MODE3 | OMAP_PIN_INPUT | OMAP_WAKEUP_EN),           // MPU9000_INT_TIMER
-    OMAP4_MUX(SIM_RESET,            OMAP_MUX_MODE3 | OMAP_PIN_INPUT),   // BCM_BT_HOST_WAKE
-    OMAP4_MUX(FREF_CLK3_OUT,        OMAP_MUX_MODE7),                    // BAT_LOW
-    OMAP4_MUX(SYS_PWRON_RESET_OUT,  OMAP_MUX_MODE7 ),                   // FPGA_CBSEL0
+    OMAP4_MUX(SIM_RESET,            OMAP_MUX_MODE3 | OMAP_PIN_INPUT | OMAP_WAKEUP_EN),           // BCM_BT_HOST_WAKE
+    OMAP4_MUX(FREF_CLK3_OUT,        OMAP_MUX_MODE7),                                             // BAT_LOW
+    OMAP4_MUX(SYS_PWRON_RESET_OUT,  OMAP_MUX_MODE7 ),                                            // FPGA_CBSEL0
 	{ .reg_offset = OMAP_MUX_TERMINATOR },
 };
 #else
