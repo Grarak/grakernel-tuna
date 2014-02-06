@@ -500,6 +500,9 @@ int omap_enter_lowpower(unsigned int cpu, unsigned int power_state)
 			__raw_writel(0x0, base);
 	}
 
+#ifdef CONFIG_MACH_NOTLE
+	omap_clear_target_disable_failure_count();
+#endif
 	cpu_clear_prev_logic_pwrst(cpu);
 	set_cpu_next_pwrst(cpu, power_state);
 	/* Decrease mpu / core usecounts to indicate we are entering idle */
@@ -551,6 +554,19 @@ int omap_enter_lowpower(unsigned int cpu, unsigned int power_state)
 	    omap_wakeupgen_check_interrupts("Aborting Suspend"))
 		goto abort_suspend;
 
+#ifdef CONFIG_MACH_NOTLE
+	/* WORKAROUND: Check and see if there are any power domain(s) that fail to be disabled.
+	 * This is triggered by generic pm suspend triggered by the omap_dec_mpu_core_pwrdm_usecount() call.
+	 * If failures are detected, abort the suspend instead of leaving a large current
+	 * draw as the next suspend will almost certainly succeed.
+	 */
+	if (power_state == PWRDM_POWER_OFF) {
+		if (omap_target_disable_failure_count()) {
+			pr_info("Aborting Suspend, unable to reach target state\n");
+			goto abort_suspend;
+		}
+	}
+#endif
 	set_cpu_wakeup_addr(cpu, virt_to_phys(omap_pm_ops.resume));
 	omap_pm_ops.scu_prepare(cpu, power_state);
 	l2x0_pwrst_prepare(cpu, save_state);
