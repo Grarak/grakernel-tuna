@@ -52,6 +52,7 @@ config ARCH_OMAP4
 	select PM_OPP if PM
 	select USB_ARCH_HAS_EHCI if USB_SUPPORT
 	select ARCH_HAS_BARRIERS
+	select HAS_MACH_MEMUTILS
 
 comment "OMAP Core Type"
 	depends on ARCH_OMAP2
@@ -434,6 +435,12 @@ config RQ_STATS
         help
          Select this to enable scheduler rune queue statistic
          collections
+
+config HAS_MACH_MEMUTILS
+	default n
+	bool "Tuna memcpy enhancements"
+	help
+	  Faster memcpy performance for Tuna
 
 endmenu
 
