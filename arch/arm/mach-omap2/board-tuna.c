@@ -72,9 +72,6 @@
 #include "resetreason.h"
 #include <mach/dmm.h>
 
-#ifdef CONFIG_KEXEC_HARDBOOT
-#include <asm/kexec.h>
-#endif
 
 struct class *sec_class;
 EXPORT_SYMBOL(sec_class);
@@ -1346,17 +1343,8 @@ static void __init omap4_tuna_led_init(void)
 static void tuna_power_off(void)
 {
 	printk(KERN_EMERG "Rebooting into bootloader for power-off.\n");
-	tuna_power_off();
+	arm_pm_restart('c', NULL);
 }
-
-#ifdef CONFIG_KEXEC_HARDBOOT
-void omap_kexec_hardboot(void)
-{
-    /* Reboot with the recovery kernel since the boot kernel decompressor may
-     * not support the hardboot jump. */
-    arm_pm_restart('c', NULL);
-}
-#endif
 
 #ifdef CONFIG_CPU_FREQ_GOV_ONDEMAND_2_PHASE
 int set_two_phase_freq(int cpufreq);
@@ -1461,9 +1449,6 @@ static void __init tuna_init(void)
 		omap4_ehci_init();
 	}
 #endif
-#ifdef CONFIG_KEXEC_HARDBOOT
-    kexec_hardboot_hook = omap_kexec_hardboot;
-#endif
 }
 
 static void __init tuna_map_io(void)
@@ -1476,7 +1461,6 @@ static void __init tuna_reserve(void)
 {
 	int i;
 	int ret;
-	unsigned long real_start, real_size;
 
 	/* do the static reservations first */
 	memblock_remove(PHYS_ADDR_SMC_MEM, PHYS_ADDR_SMC_SIZE);
@@ -1484,18 +1468,13 @@ static void __init tuna_reserve(void)
 
 	for (i = 0; i < tuna_ion_data.nr; i++)
 		if (tuna_ion_data.heaps[i].type == ION_HEAP_TYPE_CARVEOUT ||
-			tuna_ion_data.heaps[i].type == OMAP_ION_HEAP_TYPE_TILER) {
-            
-			// Register an extra 1M before ramconsole to store kexec stuff
-			real_start = tuna_ion_data.heaps[i].base - SZ_1M;
-			real_size = tuna_ion_data.heaps[i].size + SZ_1M;
-            
-			ret = memblock_remove(real_start, real_size);
-            
+		    tuna_ion_data.heaps[i].type == OMAP_ION_HEAP_TYPE_TILER) {
+			ret = memblock_remove(tuna_ion_data.heaps[i].base,
+					      tuna_ion_data.heaps[i].size);
 			if (ret)
 				pr_err("memblock remove of %x@%lx failed\n",
-					tuna_ion_data.heaps[i].size,
-					tuna_ion_data.heaps[i].base);
+				       tuna_ion_data.heaps[i].size,
+				       tuna_ion_data.heaps[i].base);
 		}
 
 	/* ipu needs to recognize secure input buffer area as well */

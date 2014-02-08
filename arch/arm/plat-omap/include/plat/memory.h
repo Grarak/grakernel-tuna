@@ -42,14 +42,6 @@
 #define PLAT_PHYS_OFFSET		UL(0x80000000)
 #endif
 
-#if defined(CONFIG_KEXEC_HARDBOOT)
-#if defined(CONFIG_MACH_TUNA)
-#define KEXEC_HB_PAGE_ADDR    UL(0xA0000000)
-#else
-#error "Adress for kexec hardboot page not defined"
-#endif
-#endif
-
 /*
  * Bus address is physical address, except for OMAP-1510 Local Bus.
  * OMAP-1510 bus address is translated into a Local Bus address if the
