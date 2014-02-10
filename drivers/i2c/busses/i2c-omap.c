@@ -632,7 +632,9 @@ static int omap_i2c_xfer_msg(struct i2c_adapter *adap,
 	return -EIO;
 
 controller_timedout:
-	dev_warn(dev->dev, "detected i2c controller timeout, pulsing i2c error switch\n");
+	dev_warn(dev->dev,
+			"detected i2c controller timeout. Remote i2c device address is 0x%x. Pulsing i2c error switch\n",
+			msg->addr);
 	switch_set_state(&dev->sdev, 0);
 	switch_set_state(&dev->sdev, 1);
 	return -ETIMEDOUT;
