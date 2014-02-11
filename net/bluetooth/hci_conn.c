@@ -308,7 +308,7 @@ static void hci_conn_timeout(struct work_struct *work)
 }
 
 /* Enter sniff mode */
-void hci_conn_enter_sniff_mode(struct hci_conn *conn)
+static void hci_conn_enter_sniff_mode(struct hci_conn *conn)
 {
 	struct hci_dev *hdev = conn->hdev;
 
