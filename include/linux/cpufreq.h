@@ -431,6 +431,5 @@ extern int cpufreq_frequency_table_next_lowest(struct cpufreq_policy *policy,
 extern int cpufreq_frequency_table_next_highest(struct cpufreq_policy *policy,
 					struct cpufreq_frequency_table *table,
 					int *index);
-extern int oc_val;
 
 #endif /* _LINUX_CPUFREQ_H */

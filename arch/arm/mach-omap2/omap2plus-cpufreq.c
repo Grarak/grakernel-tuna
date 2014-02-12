@@ -72,6 +72,7 @@ static unsigned int current_target_freq;
 static unsigned int screen_off_max_freq;
 static bool omap_cpufreq_ready;
 static bool omap_cpufreq_suspended;
+static unsigned int current_cooling_level;
 static int oc_val;
 
 #ifdef CONFIG_CPU_FREQ_GOV_INTELLIDEMAND
