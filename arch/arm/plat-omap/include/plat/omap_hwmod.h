@@ -647,6 +647,11 @@ int omap_hwmod_pad_wakeup_handler(struct omap_hwmod *oh, int pad_idx,
 
 const char *omap_hwmod_get_main_clk(struct omap_hwmod *oh);
 
+#ifdef CONFIG_MACH_NOTLE
+void omap_increment_target_disable_failure_count(void);
+int omap_target_disable_failure_count(void);
+void omap_clear_target_disable_failure_count(void);
+#endif
 /*
  * Chip variant-specific hwmod init routines - XXX should be converted
  * to use initcalls once the initial boot ordering is straightened out

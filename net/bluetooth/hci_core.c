@@ -2958,33 +2958,3 @@ int hci_cancel_inquiry(struct hci_dev *hdev)
 
 	return hci_send_cmd(hdev, HCI_OP_INQUIRY_CANCEL, 0, NULL);
 }
-
-static int hci_suspend_conns(struct hci_dev *hdev)
-{
-	struct hci_conn_hash *h = &hdev->conn_hash;
-	struct list_head *p;
-
-	BT_DBG("hdev %s, hci_suspend_conns()", hdev->name);
-
-	p = h->list.next;
-	while (p != &h->list) {
-		struct hci_conn *c;
-		c = list_entry(p, struct hci_conn, list);
-		p = p->next;
-		hci_conn_enter_sniff_mode(c);
-	}
-
-	return 0;
-}
-
-void hci_sniff_all_conns(void)
-{
-	struct list_head *p;
-
-	read_lock(&hci_dev_list_lock);
-	list_for_each(p, &hci_dev_list) {
-		struct hci_dev *hdev = list_entry(p, struct hci_dev, list);
-		hci_suspend_conns(hdev);
-	}
-	read_unlock(&hci_dev_list_lock);
-}

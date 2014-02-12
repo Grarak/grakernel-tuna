@@ -58,6 +58,7 @@
 
 /* timeout waiting for the controller to respond */
 #define OMAP_I2C_TIMEOUT (msecs_to_jiffies(1000))
+#define OMAP_I2C_MAX_TIMEOUTS (8)
 
 /* For OMAP3 I2C_IV has changed to I2C_WE (wakeup enable) */
 enum {
@@ -212,6 +213,7 @@ struct omap_i2c_dev {
 						   suspended and can't be
 						   accessible*/
 	struct		switch_dev sdev;
+	int			timeout_count;
 };
 
 static const u8 reg_map_ip_v1[] = {
@@ -532,6 +534,7 @@ static int omap_i2c_xfer_msg(struct i2c_adapter *adap,
 	struct omap_i2c_dev *dev = i2c_get_adapdata(adap);
 	unsigned long timeout;
 	u16 w;
+	u8 *p;
 
 	dev_dbg(dev->dev, "addr: 0x%04x, len: %d, flags: 0x%x, stop: %d\n",
 		msg->addr, msg->len, msg->flags, stop);
@@ -608,6 +611,7 @@ static int omap_i2c_xfer_msg(struct i2c_adapter *adap,
 	}
 
 	if (likely(!dev->cmd_err)) {
+		dev->timeout_count = OMAP_I2C_MAX_TIMEOUTS;
 		switch_set_state(&dev->sdev, 0);
 		return 0;
 	}
@@ -632,9 +636,21 @@ static int omap_i2c_xfer_msg(struct i2c_adapter *adap,
 	return -EIO;
 
 controller_timedout:
-	dev_warn(dev->dev, "detected i2c controller timeout, pulsing i2c error switch\n");
-	switch_set_state(&dev->sdev, 0);
-	switch_set_state(&dev->sdev, 1);
+	dev->timeout_count -= 1;
+	dev_warn(dev->dev,
+			"omap i2c timeout. Remote i2c device address=0x%x, flags=0x%x",
+			msg->addr, msg->flags);
+
+	dev_warn(dev->dev, "i2c command payload dump:");
+	for (p=msg->buf; p<msg->buf+msg->len; p++)
+		dev_warn(dev->dev, "0x%x", *p);
+
+	if (dev->timeout_count < 0) {
+		dev_warn(dev->dev, "Too many controller timeouts. Pulsing i2c error switch\n");
+		switch_set_state(&dev->sdev, 0);
+		switch_set_state(&dev->sdev, 1);
+		dev->timeout_count = OMAP_I2C_MAX_TIMEOUTS;
+	}
 	return -ETIMEDOUT;
 }
 

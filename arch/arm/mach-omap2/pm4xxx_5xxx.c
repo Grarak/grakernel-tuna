@@ -214,8 +214,9 @@ static int omap4_5_pm_suspend(void)
 		omap_set_pwrdm_state(pwrst->pwrdm, pwrst->next_state);
 	}
 
+#ifdef CONFIG_MACH_NOTLE
 	omap_board_suspend_event();
-
+#endif
 	/*
 	 * For MPUSS to hit power domain retention(CSWR or OSWR),
 	 * CPU0 and CPU1 power domains need to be in OFF or DORMANT state,
