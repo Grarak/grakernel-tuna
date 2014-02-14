@@ -2379,8 +2379,13 @@ err_out:
 
 /* hack to get around IRQ during suspend issue */
 #ifdef CONFIG_PM
-static int glasshub_resume(struct device *dev)
+static int glasshub_resume_noirq(struct device *dev)
 {
+	/*
+	 * Re-enable interrupt handling after this.
+	 * i2c should be restored at this point, and it should
+	 * be safe to handle any pending wakeup interrupt.
+         */
 	struct glasshub_data *glasshub = dev_get_drvdata(dev);
 	clear_bit(FLAG_DEVICE_SUSPENDED, &glasshub->flags);
 	mutex_unlock(&glasshub->device_lock);
@@ -2389,6 +2394,7 @@ static int glasshub_resume(struct device *dev)
 
 static int glasshub_suspend(struct device *dev)
 {
+	/* After this point, no glasshub irq will be handled */
 	struct glasshub_data *glasshub = dev_get_drvdata(dev);
 	mutex_lock(&glasshub->device_lock);
 	set_bit(FLAG_DEVICE_SUSPENDED, &glasshub->flags);
@@ -2397,7 +2403,7 @@ static int glasshub_suspend(struct device *dev)
 
 static const struct dev_pm_ops glasshub_pmops = {
 	.suspend = glasshub_suspend,
-	.resume = glasshub_resume,
+	.resume_noirq = glasshub_resume_noirq,
 };
 #define GLASSHUB_PMOPS (&glasshub_pmops)
 #else
