@@ -2388,7 +2388,6 @@ static int glasshub_resume_noirq(struct device *dev)
          */
 	struct glasshub_data *glasshub = dev_get_drvdata(dev);
 	clear_bit(FLAG_DEVICE_SUSPENDED, &glasshub->flags);
-	mutex_unlock(&glasshub->device_lock);
 	return 0;
 }
 
@@ -2396,7 +2395,6 @@ static int glasshub_suspend(struct device *dev)
 {
 	/* After this point, no glasshub irq will be handled */
 	struct glasshub_data *glasshub = dev_get_drvdata(dev);
-	mutex_lock(&glasshub->device_lock);
 	set_bit(FLAG_DEVICE_SUSPENDED, &glasshub->flags);
 	return 0;
 }
