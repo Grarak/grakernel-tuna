@@ -171,11 +171,13 @@ void RequestSGXFreq(SYS_DATA *psSysData, IMG_BOOL bMaxFreq)
 					  &gpsPVRLDMDev->dev,
 					  psSysSpecData->pui32SGXFreqList[freq_index]);
 
+#ifdef CONFIG_PVR_GOVERNOR
 		// faux123: store freq value for sysfs read
 		PVRSimpleGovFreqUpdate(psSysSpecData->pui32SGXFreqList[freq_index]);
 
 		// faux123 debug
 		//pr_info(" PVR freq: %u\n", psSysSpecData->pui32SGXFreqList[freq_index]);
+#endif
 
 		if (res == 0)
 			psSysSpecData->ui32SGXFreqListIndex = freq_index;
