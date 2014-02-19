@@ -181,31 +181,31 @@ static void __cpuinit intelli_plug_work_fn(struct work_struct *work)
 #ifdef DEBUG_INTELLI_PLUG
 		pr_info("nr_run_stat: %u\n", nr_run_stat);
 #endif
-		cpu_count = nr_run_stat;
+		cpu_count = nr_run_stat < 2 ? nr_run_stat : 1;
 		// detect artificial loads or constant loads
 		// using msm rqstats
 		nr_cpus = num_online_cpus();
-		if (!eco_mode_active && (nr_cpus >= 1 && nr_cpus < 4)) {
+		if (!eco_mode_active && (nr_cpus >= 0 && nr_cpus < 2)) {
 			decision = mp_decision();
 			if (decision) {
 				switch (nr_cpus) {
-				case 2:
-					cpu_count = 3;
+				case 0:
+					cpu_count = 1;
 #ifdef DEBUG_INTELLI_PLUG
-					pr_info("nr_run(2) => %u\n", nr_run_stat);
+					pr_info("nr_run(0) => %u\n", nr_run_stat);
 #endif
 					break;
-				case 3:
-					cpu_count = 4;
+				case 1:
+					cpu_count = 2;
 #ifdef DEBUG_INTELLI_PLUG
-					pr_info("nr_run(3) => %u\n", nr_run_stat);
+					pr_info("nr_run(1) => %u\n", nr_run_stat);
 #endif
 					break;
 				}
 			}
 		}
 		/* it's busy.. lets help it a bit */
-		if (cpu_count > 2) {
+		if (cpu_count == 2) {
 			if (busy_persist_count == 0) {
 				sampling_time = BUSY_SAMPLING_MS;
 				busy_persist_count = BUSY_PERSISTENCE;
@@ -224,7 +224,7 @@ static void __cpuinit intelli_plug_work_fn(struct work_struct *work)
 					persist_count--;
 				if (persist_count == 0) {
 					//take down everyone
-					for (i = 3; i > 0; i--)
+					for (i = 2; i > 0; i--)
 						cpu_down(i);
 				}
 #ifdef DEBUG_INTELLI_PLUG
@@ -235,41 +235,15 @@ static void __cpuinit intelli_plug_work_fn(struct work_struct *work)
 				persist_count = DUAL_CORE_PERSISTENCE;
 				if (!decision)
 					persist_count = DUAL_CORE_PERSISTENCE / CPU_DOWN_FACTOR;
-				if (nr_cpus < 2) {
+				if (nr_cpus < 1) {
 					for (i = 1; i < cpu_count; i++)
 						cpu_up(i);
 				} else {
-					for (i = 3; i >  1; i--)
+					for (i = 2; i >  1; i--)
 						cpu_down(i);
 				}
 #ifdef DEBUG_INTELLI_PLUG
 				pr_info("case 2: %u\n", persist_count);
-#endif
-				break;
-			case 3:
-				persist_count = TRI_CORE_PERSISTENCE;
-				if (!decision)
-					persist_count = TRI_CORE_PERSISTENCE / CPU_DOWN_FACTOR;
-				if (nr_cpus < 3) {
-					for (i = 1; i < cpu_count; i++)
-						cpu_up(i);
-				} else {
-					for (i = 3; i > 2; i--)
-						cpu_down(i);
-				}
-#ifdef DEBUG_INTELLI_PLUG
-				pr_info("case 3: %u\n", persist_count);
-#endif
-				break;
-			case 4:
-				persist_count = QUAD_CORE_PERSISTENCE;
-				if (!decision)
-					persist_count = QUAD_CORE_PERSISTENCE / CPU_DOWN_FACTOR;
-				if (nr_cpus < 4)
-					for (i = 1; i < cpu_count; i++)
-						cpu_up(i);
-#ifdef DEBUG_INTELLI_PLUG
-				pr_info("case 4: %u\n", persist_count);
 #endif
 				break;
 			default:
@@ -290,7 +264,7 @@ static void __cpuinit intelli_plug_work_fn(struct work_struct *work)
 static void intelli_plug_early_suspend(struct early_suspend *handler)
 {
 	int i;
-	int num_of_active_cores = 4;
+	int num_of_active_cores = 2;
 	
 	cancel_delayed_work_sync(&intelli_plug_work);
 
@@ -317,9 +291,9 @@ static void __cpuinit intelli_plug_late_resume(struct early_suspend *handler)
 
 	/* wake up everyone */
 	if (eco_mode_active)
-		num_of_active_cores = 2;
+		num_of_active_cores = 1;
 	else
-		num_of_active_cores = 4;
+		num_of_active_cores = 2;
 
 	for (i = 1; i < num_of_active_cores; i++) {
 		cpu_up(i);
