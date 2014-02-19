@@ -612,6 +612,9 @@ static irqreturn_t glasshub_threaded_irq_handler(int irq, void *dev_id)
 	int i;
 	uint64_t timestamp;
 
+	/* clear in-service flag */
+	clear_bit(FLAG_WAKE_THREAD, &glasshub->flags);
+
 	/* if device is suspended, ignore it until resumed */
 	if (test_bit(FLAG_DEVICE_SUSPENDED, &glasshub->flags)) {
 		dev_warn(&glasshub->i2c_client->dev,
@@ -620,9 +623,7 @@ static irqreturn_t glasshub_threaded_irq_handler(int irq, void *dev_id)
 		return IRQ_HANDLED;
 	}
 
-	/* clear in-service flag */
 	timestamp = glasshub->irq_timestamp;
-	clear_bit(FLAG_WAKE_THREAD, &glasshub->flags);
 
 	mutex_lock(&glasshub->device_lock);
 
