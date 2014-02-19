@@ -185,7 +185,7 @@ struct dentry *rproc_create_trace_file(const char *name, struct rproc *rproc,
 {
 	struct dentry *tfile;
 
-	tfile = debugfs_create_file(name, 0400, rproc->dbg_dir,
+	tfile = debugfs_create_file(name, 0444, rproc->dbg_dir,
 						trace, &trace_rproc_ops);
 	if (!tfile) {
 		dev_err(&rproc->dev, "failed to create debugfs trace entry\n");
@@ -214,13 +214,13 @@ void rproc_create_debug_dir(struct rproc *rproc)
 	if (!rproc->dbg_dir)
 		return;
 
-	debugfs_create_file("name", 0400, rproc->dbg_dir,
+	debugfs_create_file("name", 0444, rproc->dbg_dir,
 					rproc, &rproc_name_ops);
-	debugfs_create_file("state", 0400, rproc->dbg_dir,
+	debugfs_create_file("state", 0444, rproc->dbg_dir,
 					rproc, &rproc_state_ops);
-	debugfs_create_file("recovery", 0400, rproc->dbg_dir,
+	debugfs_create_file("recovery", 0444, rproc->dbg_dir,
 					rproc, &rproc_recovery_ops);
-	debugfs_create_file("version", 0400, rproc->dbg_dir,
+	debugfs_create_file("version", 0444, rproc->dbg_dir,
 					rproc, &rproc_version_ops);
 }
 
