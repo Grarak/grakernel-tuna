@@ -132,6 +132,7 @@
 #define FLAG_SYSFS_CREATED		3
 #define FLAG_DEVICE_DISABLED		4
 #define FLAG_WINK_FLAG_ENABLE		5
+#define FLAG_DEVICE_SUSPENDED		6
 #define FLAG_DEVICE_MAY_BE_WEDGED	31
 
 /* flags for device permissions */
@@ -580,6 +581,14 @@ static irqreturn_t glasshub_irq_handler(int irq, void *dev_id)
 	/* if threaded handler is already scheduled, don't schedule it again */
 	if (test_and_set_bit(FLAG_WAKE_THREAD, &glasshub->flags)) goto Handled;
 
+	/* if device is suspended, ignore it until resumed */
+	if (test_bit(FLAG_DEVICE_SUSPENDED, &glasshub->flags)) {
+		dev_warn(&glasshub->i2c_client->dev,
+			"%s: IRQ rx'd in suspend ignored\n",
+			__FUNCTION__);
+		goto Handled;
+	}
+
 	/* save timestamp for threaded handler and schedule it */
 	glasshub->irq_timestamp = read_robust_clock();
 	return IRQ_WAKE_THREAD;
@@ -604,8 +613,17 @@ static irqreturn_t glasshub_threaded_irq_handler(int irq, void *dev_id)
 	uint64_t timestamp;
 
 	/* clear in-service flag */
-	timestamp = glasshub->irq_timestamp;
 	clear_bit(FLAG_WAKE_THREAD, &glasshub->flags);
+
+	/* if device is suspended, ignore it until resumed */
+	if (test_bit(FLAG_DEVICE_SUSPENDED, &glasshub->flags)) {
+		dev_warn(&glasshub->i2c_client->dev,
+			"%s: Threaded IRQ rx'd in suspend ignored\n",
+			__FUNCTION__);
+		return IRQ_HANDLED;
+	}
+
+	timestamp = glasshub->irq_timestamp;
 
 	mutex_lock(&glasshub->device_lock);
 
@@ -2362,23 +2380,29 @@ err_out:
 
 /* hack to get around IRQ during suspend issue */
 #ifdef CONFIG_PM
-static int glasshub_resume(struct device *dev)
+static int glasshub_resume_noirq(struct device *dev)
 {
+	/*
+	 * Re-enable interrupt handling after this.
+	 * i2c should be restored at this point, and it should
+	 * be safe to handle any pending wakeup interrupt.
+         */
 	struct glasshub_data *glasshub = dev_get_drvdata(dev);
-	mutex_unlock(&glasshub->device_lock);
+	clear_bit(FLAG_DEVICE_SUSPENDED, &glasshub->flags);
 	return 0;
 }
 
 static int glasshub_suspend(struct device *dev)
 {
+	/* After this point, no glasshub irq will be handled */
 	struct glasshub_data *glasshub = dev_get_drvdata(dev);
-	mutex_lock(&glasshub->device_lock);
+	set_bit(FLAG_DEVICE_SUSPENDED, &glasshub->flags);
 	return 0;
 }
 
 static const struct dev_pm_ops glasshub_pmops = {
 	.suspend = glasshub_suspend,
-	.resume = glasshub_resume,
+	.resume_noirq = glasshub_resume_noirq,
 };
 #define GLASSHUB_PMOPS (&glasshub_pmops)
 #else

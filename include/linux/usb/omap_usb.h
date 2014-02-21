@@ -127,6 +127,7 @@ enum twl6030_usb_events {
 int twl6030_usb_register_notifier(struct notifier_block *nb);
 int twl6030_usb_unregister_notifier(struct notifier_block *nb);
 int twl6030_usb_event(enum twl6030_usb_events event);
+int twl6030_usb_get_supply_type(void);
 #else
 static inline int twl6030_usb_register_notifier(struct notifier_block *nb)
 {

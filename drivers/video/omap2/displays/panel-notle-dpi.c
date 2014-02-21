@@ -147,14 +147,16 @@ static struct init_register_value panel_init_regs[] = {
   { 0x19, 0x12 },
   { 0x1A, 0xE9 },
   { REG_GAMMA, 0x21 },
-  { REG_DELAY, 0x0A },
-  { 0x00, 0x80 },
+  { REG_DELAY, 0x05 },
+  { 0x00, 0x81 },
+  { REG_DELAY, 0x04 },
 };
 
 static struct init_register_value panel_shutdown_regs[] = {
   { 0x00, 0x85 },
-  { REG_DELAY, 0x0A },
-  { 0x00, 0x80 },
+  { REG_DELAY, 0x05 },
+  { 0x00, 0x81 },
+  { REG_DELAY, 0x04 },
 };
 
 static notle_version version;

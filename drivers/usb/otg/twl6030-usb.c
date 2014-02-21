@@ -467,6 +467,17 @@ int twl6030_usb_event(enum twl6030_usb_events event)
 }
 EXPORT_SYMBOL_GPL(twl6030_usb_event);
 
+int twl6030_usb_get_supply_type(void)
+{
+	struct twl6030_usb *twl = twl6030_priv;
+
+	if (!twl)
+		return -EINVAL;
+
+	return twl->supply_type;
+}
+EXPORT_SYMBOL_GPL(twl6030_usb_get_supply_type);
+
 static inline int twl6030_writeb(struct twl6030_usb *twl, u8 module,
 						u8 data, u8 address)
 {

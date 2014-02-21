@@ -269,7 +269,6 @@ struct charger_info {
 	struct device *dev;
 
 	enum charger_state state;
-	enum power_supply_type charger_type;
 
 	/* battery state */
 	int gg_status;
@@ -1284,6 +1283,14 @@ static int __devinit charger_probe(struct platform_device *pdev)
 	if (ret) {
 		dev_err(dev, "failed to register usb power supply\n");
 		goto usb_failed;
+	}
+
+	/* get the current supply type, which may have been determined before
+	 * the notifier below has been registered */
+	ret = twl6030_usb_get_supply_type();
+	if (ret > 0) {
+		dev_info(dev, "initial power supply type is %d\n", ret);
+		di->charger_supply_type = ret;
 	}
 
 	di->notifier.notifier_call = charger_usb_notifier_call;
