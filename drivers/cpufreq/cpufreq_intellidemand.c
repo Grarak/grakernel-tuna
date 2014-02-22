@@ -53,11 +53,11 @@
 #define DEF_SAMPLING_RATE			(50000)
 #define BOOSTED_SAMPLING_RATE			(15000)
 #define DBS_INPUT_EVENT_MIN_FREQ		(1200000)
-#define DBS_SYNC_FREQ				(700000)
-#define DBS_OPTIMAL_FREQ			(1060000)
+#define DBS_SYNC_FREQ				(720000)
+#define DBS_OPTIMAL_FREQ			(980000)
 
 #ifdef CONFIG_CPUFREQ_ID_PERFLOCK
-#define DBS_PERFLOCK_MIN_FREQ			(525000)
+#define DBS_PERFLOCK_MIN_FREQ			(540000)
 #endif
 
 static u64 freq_boosted_time;
@@ -182,7 +182,7 @@ static struct dbs_tuners {
 	.sync_freq = DBS_SYNC_FREQ,
 	.optimal_freq = DBS_OPTIMAL_FREQ,
 	.freq_boost_time = DEFAULT_FREQ_BOOST_TIME,
-	.boostfreq = 1026000,
+	.boostfreq = 980000,
 #ifdef CONFIG_CPU_FREQ_GOV_ONDEMAND_2_PHASE
 	.two_phase_freq = 1200000,
 #endif
