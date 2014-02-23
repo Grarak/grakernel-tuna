@@ -651,7 +651,7 @@ static struct freq_attr omap_UV_mV_table = {
 #endif
 
 static ssize_t show_gpu_clock(struct cpufreq_policy *policy, char *buf) {
-	return sprintf(buf, "%lu MHz\n", clk_get(NULL, "dpll_per_m7x2_ck")->rate/1000000);
+	return sprintf(buf, "%lu\n", clk_get(NULL, "dpll_per_m7x2_ck")->rate/1000);
 }
 
 static struct freq_attr gpu_clock = {
