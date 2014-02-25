@@ -27,7 +27,6 @@
 #include <linux/slab.h>
 #include <linux/kfifo.h>
 #include <linux/ctype.h>
-#include <linux/workqueue.h>
 
 /* Used to provide access via misc device */
 #include <linux/miscdevice.h>
@@ -39,7 +38,7 @@
 
 /* driver name/version */
 #define DEVICE_NAME			"glasshub"
-#define DRIVER_VERSION			"0.21"
+#define DRIVER_VERSION			"0.22"
 
 /* minimum MCU firmware version required for this driver */
 #define MINIMUM_MCU_VERSION		((1 << 8) | 12)
@@ -127,12 +126,14 @@
 #define PS_MAX_VALUE			65535
 
 /* bit fields for flags */
-#define FLAG_WAKE_THREAD		0
+#define FLAG_WAKE_HANDLER		0
 #define FLAG_DEVICE_BOOTED		1
 #define FLAG_FLASH_MODE			2
 #define FLAG_SYSFS_CREATED		3
 #define FLAG_DEVICE_DISABLED		4
 #define FLAG_WINK_FLAG_ENABLE		5
+#define FLAG_HANDLER_RUNNING		6
+#define FLAG_DEVICE_SUSPENDED		7
 #define FLAG_DEVICE_MAY_BE_WEDGED	31
 
 /* flags for device permissions */
@@ -293,8 +294,6 @@ struct glasshub_data {
 	uint8_t last_irq_status;
 	uint8_t pause;
 	int debug;
-	struct work_struct irq_work;
-	struct workqueue_struct *wq;
 };
 
 struct glasshub_data *glasshub_private = NULL;
@@ -569,42 +568,14 @@ err_out:
 	return rc;
 }
 
-/* Main interrupt handler. We save a timestamp here and schedule
- * the threaded handler to run later, since we might have to
- * block on I/O requests from user space.
- */
-static irqreturn_t glasshub_irq_handler(int irq, void *dev_id)
-{
-	struct glasshub_data *glasshub = (struct glasshub_data*) dev_id;
-
-	/* if device is not booted, the interrupt must be someone else */
-	if (!test_bit(FLAG_DEVICE_BOOTED, &glasshub->flags)) goto Handled;
-
-	/* if threaded handler is already scheduled, don't schedule it again */
-	if (test_and_set_bit(FLAG_WAKE_THREAD, &glasshub->flags)) goto Handled;
-
-	/* save timestamp for threaded handler and schedule it */
-	glasshub->irq_timestamp = read_robust_clock();
-
-	if (queue_work(glasshub->wq, &glasshub->irq_work) == 0) {
-		dev_err(&glasshub->i2c_client->dev,
-			"%s: Failed to queue work for IRQ.\n",
-			__FUNCTION__);
-	}
-
-Handled:
-	return IRQ_HANDLED;
-}
-
-/* IRQ Workqueue handler. This is where the real work gets done.
+/* Threaded interrupt handler. This is where the real work gets done.
  * We grab a mutex to prevent I/O requests from user space from
  * running concurrently. The timestamp for critical operations comes
  * from the main interrupt handler.
  */
-static void glasshub_irq_bh_handler(struct work_struct *work)
+static irqreturn_t glasshub_threaded_irq_handler(int irq, void *dev_id)
 {
-	struct glasshub_data *glasshub =
-		container_of(work, struct glasshub_data, irq_work);
+	struct glasshub_data *glasshub = (struct glasshub_data*) dev_id;
 	int rc = 0;
 	uint8_t status;
 	uint16_t data[PROX_QUEUE_SZ];
@@ -613,14 +584,23 @@ static void glasshub_irq_bh_handler(struct work_struct *work)
 	uint64_t timestamp;
 
 	/* clear in-service flag */
-	clear_bit(FLAG_WAKE_THREAD, &glasshub->flags);
 	timestamp = glasshub->irq_timestamp;
+	set_bit(FLAG_HANDLER_RUNNING, &glasshub->flags);
+	clear_bit(FLAG_WAKE_HANDLER, &glasshub->flags);
 
 	mutex_lock(&glasshub->device_lock);
 
+	/* check to see if device is suspended */
+	if (test_bit(FLAG_DEVICE_SUSPENDED, &glasshub->flags)) {
+		dev_err(&glasshub->i2c_client->dev,
+				"%s: Ignoring pending interrupt because device is suspended\n",
+				__FUNCTION__);
+		goto Exit;
+	}
+
 	/* just in case the glasshub was reset after scheduling this handler */
 	if (!test_bit(FLAG_DEVICE_BOOTED, &glasshub->flags)) {
-		dev_warn(&glasshub->i2c_client->dev,
+		dev_err(&glasshub->i2c_client->dev,
 				"%s: Ignoring pending interrupt because device is disabled\n",
 				__FUNCTION__);
 		goto Exit;
@@ -765,7 +745,30 @@ Error:
 
 Exit:
 	mutex_unlock(&glasshub->device_lock);
-	return;
+	clear_bit(FLAG_HANDLER_RUNNING, &glasshub->flags);
+	return IRQ_HANDLED;
+}
+
+/* Main interrupt handler. We save a timestamp here and schedule
+ * the threaded handler to run later, since we might have to
+ * block on I/O requests from user space.
+ */
+static irqreturn_t glasshub_irq_handler(int irq, void *dev_id)
+{
+	struct glasshub_data *glasshub = (struct glasshub_data*) dev_id;
+
+	/* if device is not booted, the interrupt must be someone else */
+	if (!test_bit(FLAG_DEVICE_BOOTED, &glasshub->flags)) goto Handled;
+
+	/* if threaded handler is already scheduled, don't schedule it again */
+	if (test_and_set_bit(FLAG_WAKE_HANDLER, &glasshub->flags)) goto Handled;
+
+	/* save timestamp for threaded handler and schedule it */
+	glasshub->irq_timestamp = read_robust_clock();
+	return IRQ_WAKE_THREAD;
+
+Handled:
+	return IRQ_HANDLED;
 }
 
 /* common routine to return an I2C register to userspace */
@@ -2284,18 +2287,10 @@ static int glasshub_setup(struct glasshub_data *glasshub) {
 		}
 	}
 
-	/* Create a freezable workqueue for IRQ bottom half */
-	INIT_WORK(&glasshub->irq_work, glasshub_irq_bh_handler);
-	glasshub->wq = alloc_workqueue("glasshub_irq_freezable",
-		WQ_FREEZABLE|WQ_HIGHPRI, 0);
-	if(glasshub->wq) {
-		dev_err(&glasshub->i2c_client->dev, "%s alloc_workqueue failed\n",
-				__FUNCTION__);
-	}
-
 	/* request IRQ */
-	rc = request_threaded_irq(glasshub->pdata->irq, glasshub_irq_handler, NULL,
-			IRQF_TRIGGER_FALLING, "glasshub_irq", glasshub);
+	rc = request_threaded_irq(glasshub->pdata->irq, glasshub_irq_handler,
+			glasshub_threaded_irq_handler, IRQF_TRIGGER_FALLING,
+			"glasshub_irq", glasshub);
 	if (rc) {
 		dev_err(&glasshub->i2c_client->dev, "%s request_threaded_irq failed\n",
 				__FUNCTION__);
@@ -2377,33 +2372,38 @@ err_out:
 	return -ENODEV;
 }
 
-/* hack to get around IRQ during suspend issue */
+/* abort suspend if we have an IRQ handler pending */
 #ifdef CONFIG_PM
-static int glasshub_resume_noirq(struct device *dev)
-{
-	return 0;
-}
-
 static int glasshub_suspend_noirq(struct device *dev)
 {
 	struct glasshub_data *glasshub = dev_get_drvdata(dev);
+	if (test_bit(FLAG_WAKE_HANDLER, &glasshub->flags)) goto abort_suspend;
+	if (test_bit(FLAG_HANDLER_RUNNING, &glasshub->flags)) goto abort_suspend;
+	return 0;
 
-	/*
-	 * If there is any pending or running IRQ bottom half,
-	 * abort and let the IRQ handling resume
-	 */
-	if(work_busy(&glasshub->irq_work)) {
-		dev_info(&glasshub->i2c_client->dev,
-			"%s: Pening IRQ work. Abort.\n", __FUNCTION__);
-		return -EBUSY;
-	}
+abort_suspend:
+	dev_warn(dev, "%s: Suspend aborted due to pending IRQ handler\n", __FUNCTION__);
+	return -EBUSY;
+}
 
+static int glasshub_suspend(struct device *dev)
+{
+	struct glasshub_data *glasshub = dev_get_drvdata(dev);
+	set_bit(FLAG_DEVICE_SUSPENDED, &glasshub->flags);
+	return 0;
+}
+
+static int glasshub_resume(struct device *dev)
+{
+	struct glasshub_data *glasshub = dev_get_drvdata(dev);
+	clear_bit(FLAG_DEVICE_SUSPENDED, &glasshub->flags);
 	return 0;
 }
 
 static const struct dev_pm_ops glasshub_pmops = {
+	.suspend = glasshub_suspend,
 	.suspend_noirq = glasshub_suspend_noirq,
-	.resume_noirq = glasshub_resume_noirq,
+	.suspend_noirq = glasshub_resume,
 };
 #define GLASSHUB_PMOPS (&glasshub_pmops)
 #else
