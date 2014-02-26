@@ -144,14 +144,15 @@ int omap4_prminst_deassert_hardreset(u8 shift, u8 part, s16 inst,
 						rstctrl_offs) == 0)
 		return -EEXIST;
 
+	/* de-assert the reset control line */
+	omap4_prminst_rmw_inst_reg_bits(mask, 0, part, inst, rstctrl_offs);
+
 	/* Clear the reset status by writing 1 to the status bit */
 	omap4_prminst_rmw_inst_reg_bits(0xffffffff, mask, part, inst,
 					rstst_offs);
-	/* de-assert the reset control line */
-	omap4_prminst_rmw_inst_reg_bits(mask, 0, part, inst, rstctrl_offs);
+
 	/* wait the status to be set */
-	omap_test_timeout(omap4_prminst_is_hardreset_asserted(shift, part, inst,
-							      rstst_offs),
+	omap_test_timeout(omap4_prminst_is_hardreset_asserted(shift, part, inst, rstctrl_offs) == 0,
 			  MAX_MODULE_HARDRESET_WAIT, c);
 
 	return (c == MAX_MODULE_HARDRESET_WAIT) ? -EBUSY : 0;
