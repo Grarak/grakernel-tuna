@@ -795,6 +795,15 @@ static inline notrace void rcu_read_unlock_sched_notrace(void)
 #define RCU_INIT_POINTER(p, v) \
 		p = (typeof(*v) __force __rcu *)(v)
 
+/* Infrastructure to implement the synchronize_() primitives. */
+
+struct rcu_synchronize {
+	struct rcu_head head;
+	struct completion completion;
+};
+
+extern void wakeme_after_rcu(struct rcu_head  *head);
+
 static __always_inline bool __is_kfree_rcu_offset(unsigned long offset)
 {
 	return offset < 4096;
@@ -812,6 +821,8 @@ void __kfree_rcu(struct rcu_head *head, unsigned long offset)
 
 	call_rcu(head, (rcu_callback)offset);
 }
+
+extern void kfree(const void *);
 
 /**
  * kfree_rcu() - kfree an object after a grace period.

@@ -99,16 +99,11 @@ EXPORT_SYMBOL_GPL(rcu_read_lock_bh_held);
 
 #endif /* #ifdef CONFIG_DEBUG_LOCK_ALLOC */
 
-struct rcu_synchronize {
-	struct rcu_head head;
-	struct completion completion;
-};
-
 /*
  * Awaken the corresponding synchronize_rcu() instance now that a
  * grace period has elapsed.
  */
-static void wakeme_after_rcu(struct rcu_head  *head)
+void wakeme_after_rcu(struct rcu_head *head)
 {
 	struct rcu_synchronize *rcu;
 
