@@ -112,6 +112,7 @@
 #define IRQ_PASSTHRU			0b00000001
 #define IRQ_WINK			0b00000010
 #define IRQ_DON_DOFF			0b00000100
+#define IRQ_DEBUG			0b00001000
 
 /* status flags in STATUS register */
 #define STATUS_OVERFLOW			0b10000000
@@ -590,7 +591,7 @@ static irqreturn_t glasshub_threaded_irq_handler(int irq, void *dev_id)
 
 	mutex_lock(&glasshub->device_lock);
 
-	/* check to see if device is suspended */
+	/* ignore interrupt if driver is suspended, this will cause further IRQ's to be ignored */
 	if (test_bit(FLAG_DEVICE_SUSPENDED, &glasshub->flags)) {
 		dev_err(&glasshub->i2c_client->dev,
 				"%s: Ignoring pending interrupt because device is suspended\n",
@@ -612,7 +613,7 @@ static irqreturn_t glasshub_threaded_irq_handler(int irq, void *dev_id)
 	glasshub->last_irq_status = status;
 
 	/* process prox data */
-	while (status & (IRQ_PASSTHRU | IRQ_WINK)) {
+	while (status & (IRQ_PASSTHRU | IRQ_WINK | IRQ_DEBUG)) {
 		unsigned value = 0;
 
 		/* read value */
@@ -736,6 +737,12 @@ static irqreturn_t glasshub_threaded_irq_handler(int irq, void *dev_id)
 		dev_info(&glasshub->i2c_client->dev, "%s: wink signal received\n",
 				__FUNCTION__);
 		sysfs_notify(&glasshub->i2c_client->dev.kobj, NULL, "wink");
+	}
+
+	/* look for debug interrupt */
+	if (status & IRQ_DEBUG) {
+		dev_info(&glasshub->i2c_client->dev, "%s: debug interrupt received\n",
+				__FUNCTION__);
 	}
 	goto Exit;
 
@@ -2379,6 +2386,7 @@ static int glasshub_suspend_noirq(struct device *dev)
 	struct glasshub_data *glasshub = dev_get_drvdata(dev);
 	if (test_bit(FLAG_WAKE_HANDLER, &glasshub->flags)) goto abort_suspend;
 	if (test_bit(FLAG_HANDLER_RUNNING, &glasshub->flags)) goto abort_suspend;
+	set_bit(FLAG_DEVICE_SUSPENDED, &glasshub->flags);
 	return 0;
 
 abort_suspend:
@@ -2386,14 +2394,7 @@ abort_suspend:
 	return -EBUSY;
 }
 
-static int glasshub_suspend(struct device *dev)
-{
-	struct glasshub_data *glasshub = dev_get_drvdata(dev);
-	set_bit(FLAG_DEVICE_SUSPENDED, &glasshub->flags);
-	return 0;
-}
-
-static int glasshub_resume(struct device *dev)
+static int glasshub_resume_noirq(struct device *dev)
 {
 	struct glasshub_data *glasshub = dev_get_drvdata(dev);
 	clear_bit(FLAG_DEVICE_SUSPENDED, &glasshub->flags);
@@ -2401,9 +2402,8 @@ static int glasshub_resume(struct device *dev)
 }
 
 static const struct dev_pm_ops glasshub_pmops = {
-	.suspend = glasshub_suspend,
 	.suspend_noirq = glasshub_suspend_noirq,
-	.suspend_noirq = glasshub_resume,
+	.resume_noirq = glasshub_resume_noirq,
 };
 #define GLASSHUB_PMOPS (&glasshub_pmops)
 #else
