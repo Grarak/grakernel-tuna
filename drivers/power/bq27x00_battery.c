@@ -328,9 +328,10 @@ static enum power_supply_property bq27x00_battery_props[] = {
 static unsigned int debug_dataflash_interval = 20*60*1000;
 
 static unsigned int poll_interval = 15;
-module_param(poll_interval, uint, 0644);
-MODULE_PARM_DESC(poll_interval, "battery poll interval in seconds - " \
-				"0 disables polling");
+
+static unsigned int poll_enabled = 1;
+module_param(poll_enabled, uint, 0644);
+MODULE_PARM_DESC(poll_enabled, "battery polling enable. 0 disables polling");
 /*
  * Common code for BQ27x00 devices
  */
@@ -704,14 +705,15 @@ static void bq27x00_battery_poll(struct work_struct *work)
 	struct bq27x00_device_info *di =
 		container_of(work, struct bq27x00_device_info, work.work);
 
-	if (poll_interval > 0) {
+	if (poll_enabled > 0) {
 		mutex_lock(&di->lock);
 		bq27x00_update(di);
 		mutex_unlock(&di->lock);
-		/* The timer does not have to be accurate. */
-		set_timer_slack(&di->work.timer, poll_interval * HZ / 4);
-		queue_delayed_work(system_freezable_wq, &di->work, poll_interval * HZ);
 	}
+
+	/* The timer does not have to be accurate. */
+	set_timer_slack(&di->work.timer, poll_interval * HZ / 4);
+	queue_delayed_work(system_freezable_wq, &di->work, poll_interval * HZ);
 
 	return;
 }
@@ -1441,7 +1443,7 @@ static int bq27x00_dump_partial_dataflash(struct bq27x00_device_info *di)
 	printk("bq27x00: fw version 0x%04x; df version 0x%04x\n",
 		di->fw_ver, di->df_ver);
 
-	if(di->fw_ver == L1_600_FW_VERSION || di->fw_ver == L1_604_FW_VERSION) {
+	if(di->fw_ver == L1_600_FW_VERSION || di->fw_ver >= L1_604_FW_VERSION) {
 
 
 		getnstimeofday(&ts);
@@ -1548,7 +1550,7 @@ static int bq27x00_dump_dataflash(struct bq27x00_device_info *di)
 		ret = dump_subclass(di, 0x6b, 18);
 		ret = dump_subclass(di, 0x6c, 19);
 		ret = dump_subclass(di, 0x6d, 19);
-	} else if(di->fw_ver == L1_600_FW_VERSION || di->fw_ver == L1_604_FW_VERSION) {
+	} else if(di->fw_ver == L1_600_FW_VERSION || di->fw_ver >= L1_604_FW_VERSION) {
 
 		ret = dump_subclass(di, 0x02, 10);
 		ret = dump_subclass(di, 0x20, 6);
@@ -1851,7 +1853,7 @@ static void bq27x00_reset_registers(struct bq27x00_device_info *di)
 		"Gas Gauge fw version 0x%04x; df version 0x%04x\n",
 		di->fw_ver, di->df_ver);
 
-	if (di->fw_ver == L1_600_FW_VERSION || di->fw_ver == L1_604_FW_VERSION)
+	if (di->fw_ver == L1_600_FW_VERSION || di->fw_ver >= L1_604_FW_VERSION)
 		di->regs = bq27x00_fw_l1_regs;
 	else if (di->fw_ver == G3_FW_VERSION)
 		di->regs = bq27x00_fw_g3_regs;
