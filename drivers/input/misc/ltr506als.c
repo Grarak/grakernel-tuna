@@ -491,21 +491,21 @@ static int _hack_check_valid_als_zero(struct ltr506_data *ltr506) {
 		if (adc_val != ltr506->als_last_value) {
 			/* Don't spam logs, or reduce this to debug logging
 			   when confident this WA actually works-around */
-			dev_info(&ltr506->i2c_client->dev, "%s True dark"
-			         " adc_val:%d adc_val_raw_ch1:%d"
-			         " adc_val_raw_ch2:%d\n", __func__, adc_val,
-			         adc_val_raw_ch1, adc_val_raw_ch2);
+			dev_dbg(&ltr506->i2c_client->dev, "%s True dark"
+			        " adc_val:%d adc_val_raw_ch1:%d"
+			        " adc_val_raw_ch2:%d\n", __func__, adc_val,
+			        adc_val_raw_ch1, adc_val_raw_ch2);
 		}
 	} else {
 		/* This is the crux of this hacky work around.
 		   We believe we received a bogus darkness value.  Present last
 		   value instead under the assumption it's closer to the
 		   true value then a bogus zero. */
-		dev_info(&ltr506->i2c_client->dev, "%s Not dark presenting last"
-		         " value adc_val:%d last_val:%d adc_val_raw_ch1:%d"
-		         " adc_val_raw_ch2:%d\n", __func__, adc_val,
-		         ltr506->als_last_value, adc_val_raw_ch1,
-		         adc_val_raw_ch2);
+		dev_dbg(&ltr506->i2c_client->dev, "%s Not dark presenting last"
+		        " value adc_val:%d last_val:%d adc_val_raw_ch1:%d"
+		        " adc_val_raw_ch2:%d\n", __func__, adc_val,
+		        ltr506->als_last_value, adc_val_raw_ch1,
+		        adc_val_raw_ch2);
 		adc_val = ltr506->als_last_value;
 	}
 	dev_dbg(&ltr506->i2c_client->dev, "%s Darkness check adc_val:%d"
