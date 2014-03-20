@@ -1812,6 +1812,15 @@ static void goog_gesture_accumulate(struct goog_gesture_detect *ggd,
 	}
 }
 
+/*
+ * This routine simply speeds up the propagation of tap
+ * gesture events to the input layer.  We know that once
+ * the last finger lifts, a possible tap may be generated
+ * by the touchpad should it satisfy the definition of one.
+ * Rather than wait for the "official" one from the touchpad,
+ * to minimize user experience delay we synthesize one here
+ * and throw away the real one once received from the touchpad.
+ */
 static void goog_gesture_handler(struct f11_data *f11,
                                  struct goog_gesture_detect *ggd) {
 	/* Convenience field for gesture length in msecs. */
@@ -1824,9 +1833,10 @@ static void goog_gesture_handler(struct f11_data *f11,
 
 	delta_msec = jiffies_to_msecs(ggd->time_end - ggd->time_start);
 	/* Driver synthesized single tap gesture model.
-	   All touch events must occur within a bounding box, must have at
-	   least 2 events, must only present 1 finger and all must occur within
-	   a specified timeslice as defined as a "tap". */
+	 * All touch events must occur within a bounding box, must have at
+	 * least 2 events, must only present 1 finger and all must occur within
+	 * a specified timeslice as defined as a "tap".
+	 */
 	if (((ggd->max_x - ggd->min_x) < gesture_detect_tap_box_x)
 	    && ((ggd->max_y - ggd->min_y) < gesture_detect_tap_box_y)
 	    && (ggd->cnt > 1)
@@ -1838,8 +1848,10 @@ static void goog_gesture_handler(struct f11_data *f11,
 		                      "driver single tap",
 		                      GESTURE_OFFSET_SINGLE_TAP_X,
 		                      GESTURE_OFFSET_SINGLE_TAP_Y);
-		/* Consume the early tap to prevent the real gesture
-		   from being sent by the touchpad device. */
+		/* Consume the early tap presented by the touchpad which prevents
+		 * the possibly pending real gesture from propagating through from
+		 * the touchpad device to the input layer
+		 */
 		f11->goog.early_tap = 0;
 	} else {
 		dev_info(&f11->sensors[0].fc->dev, "%s Ignoring driver"
@@ -1953,10 +1965,43 @@ static void rmi_f11_finger_handler(struct f11_data *f11,
 				         " tap gesture with no previous early"
 				         " tap\n", __func__);
 			} else {
-				rmi_f11_input_gesture(f11, sensor,
-				                      "single tap",
-				                      GESTURE_OFFSET_SINGLE_TAP_X,
-				                      GESTURE_OFFSET_SINGLE_TAP_Y);
+				int x_peek = ((data->abs_pos[0].x_msb << 4) | data->abs_pos[0].x_lsb);
+				int y_peek = ((data->abs_pos[0].y_msb << 4) | data->abs_pos[0].y_lsb);
+
+				if (sensor->axis_align.flip_x)
+					x_peek = max(sensor->max_x - x_peek, 0);
+				if (sensor->axis_align.flip_y)
+					y_peek = max(sensor->max_y - y_peek, 0);
+
+				if (f11->goog.goog_view_enable
+				    && (y_peek >= f11->goog.goog_view_min_y)
+				    && (y_peek <= f11->goog.goog_view_max_y)
+				    && (x_peek >= f11->goog.goog_view_min_x)
+				    && (x_peek <= f11->goog.goog_view_max_x)) {
+					/* Cached x/y coordinates from last finger landing
+					   on touchpad is within the enabled viewfinder area.
+					   Consume and ignore touchpad generated tap gesture
+					   event */
+					dev_info(&sensor->fc->dev, "%s Rejecting single tap"
+					         " gesture within viewfinder boundary"
+					         " min_y:%d y:%d max_y:%d"
+					         " min_x:%d x:%d max_x:%d\n",
+					         __func__, f11->goog.goog_view_min_y, y_peek,
+					         f11->goog.goog_view_max_y, f11->goog.goog_view_min_x,
+					         x_peek, f11->goog.goog_view_max_x);
+				} else {
+					dev_info(&sensor->fc->dev, "%s Presenting single"
+					         " tap gesture outside viewfinder boundary"
+					         " min_y:%d y:%d max_y:%d"
+					         " min_x:%d x:%d max_x:%d\n",
+					         __func__, f11->goog.goog_view_min_y, y_peek,
+					         f11->goog.goog_view_max_y, f11->goog.goog_view_min_x,
+					         x_peek, f11->goog.goog_view_max_x);
+					rmi_f11_input_gesture(f11, sensor,
+					                      "single tap",
+					                      GESTURE_OFFSET_SINGLE_TAP_X,
+					                      GESTURE_OFFSET_SINGLE_TAP_Y);
+				}
 			}
 		}
 		if (data->gest_1->double_tap == 1) {
