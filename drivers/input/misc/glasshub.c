@@ -2384,13 +2384,14 @@ err_out:
 static int glasshub_suspend_noirq(struct device *dev)
 {
 	struct glasshub_data *glasshub = dev_get_drvdata(dev);
+	set_bit(FLAG_DEVICE_SUSPENDED, &glasshub->flags);
 	if (test_bit(FLAG_WAKE_HANDLER, &glasshub->flags)) goto abort_suspend;
 	if (test_bit(FLAG_HANDLER_RUNNING, &glasshub->flags)) goto abort_suspend;
-	set_bit(FLAG_DEVICE_SUSPENDED, &glasshub->flags);
 	return 0;
 
 abort_suspend:
 	dev_warn(dev, "%s: Suspend aborted due to pending IRQ handler\n", __FUNCTION__);
+	clear_bit(FLAG_DEVICE_SUSPENDED, &glasshub->flags);
 	return -EBUSY;
 }
 
