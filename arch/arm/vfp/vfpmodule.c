@@ -18,6 +18,10 @@
 #include <linux/sched.h>
 #include <linux/smp.h>
 #include <linux/init.h>
+#include <linux/uaccess.h>
+#include <linux/user.h>
+#include <linux/export.h>
+#include <linux/proc_fs.h>
 
 #include <asm/cputype.h>
 #include <asm/thread_notify.h>
@@ -523,6 +527,44 @@ void vfp_flush_hwstate(struct thread_info *thread)
 	put_cpu();
 }
 
+#ifdef CONFIG_KERNEL_MODE_NEON
+
+/*
+ * Kernel-side NEON support functions
+ */
+void kernel_neon_begin(void)
+{
+	unsigned int cpu;
+	u32 fpexc;
+
+	/*
+	 * Kernel mode NEON is only allowed outside of interrupt context
+	 * with preemption disabled. This will make sure that the kernel
+	 * mode NEON register contents never need to be preserved.
+	 */
+	cpu = get_cpu();
+
+	fpexc = fmrx(FPEXC) | FPEXC_EN;
+	fmxr(FPEXC, fpexc);
+
+#ifndef CONFIG_SMP
+	else if (vfp_current_hw_state[cpu] != NULL)
+		vfp_save_state(vfp_current_hw_state[cpu], fpexc);
+#endif
+	vfp_current_hw_state[cpu] = NULL;
+}
+EXPORT_SYMBOL(kernel_neon_begin);
+
+void kernel_neon_end(void)
+{
+	/* Disable the NEON/VFP unit. */
+	fmxr(FPEXC, fmrx(FPEXC) & ~FPEXC_EN);
+	put_cpu();
+}
+EXPORT_SYMBOL(kernel_neon_end);
+
+#endif /* CONFIG_KERNEL_MODE_NEON */
+
 /*
  * VFP hardware can lose all context when a CPU goes offline.
  * As we will be running in SMP mode with CPU hotplug, we will save the
@@ -626,4 +668,4 @@ static int __init vfp_init(void)
 	return 0;
 }
 
-late_initcall(vfp_init);
+core_initcall(vfp_init);
