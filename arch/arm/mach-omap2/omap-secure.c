@@ -152,14 +152,7 @@ int __init omap_secure_ram_reserve_memblock(void)
 	u32 size = OMAP_SECURE_RAM_STORAGE;
 
 	size = ALIGN(size, SZ_1M);
-#ifdef CONFIG_VMSPLIT_3G
 	omap_secure_memblock_base = arm_memblock_steal(size, SZ_1M);
-#else
-	// PPA cannot access beyond the 0x8-0xB range.
-	omap_secure_memblock_base = memblock_alloc_base(size, SZ_1M, 0xB0000000);
-	memblock_free(omap_secure_memblock_base, size);
-	memblock_remove(omap_secure_memblock_base, size);
-#endif
 
 	return 0;
 }
