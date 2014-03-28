@@ -27,6 +27,7 @@
 #include <linux/slab.h>
 #include <linux/kfifo.h>
 #include <linux/ctype.h>
+#include <linux/pm_runtime.h>
 
 /* Used to provide access via misc device */
 #include <linux/miscdevice.h>
@@ -38,7 +39,7 @@
 
 /* driver name/version */
 #define DEVICE_NAME			"glasshub"
-#define DRIVER_VERSION			"0.22"
+#define DRIVER_VERSION			"0.23"
 
 /* minimum MCU firmware version required for this driver */
 #define MINIMUM_MCU_VERSION		((1 << 8) | 12)
@@ -134,7 +135,6 @@
 #define FLAG_DEVICE_DISABLED		4
 #define FLAG_WINK_FLAG_ENABLE		5
 #define FLAG_HANDLER_RUNNING		6
-#define FLAG_DEVICE_SUSPENDED		7
 #define FLAG_DEVICE_MAY_BE_WEDGED	31
 
 /* flags for device permissions */
@@ -584,6 +584,9 @@ static irqreturn_t glasshub_threaded_irq_handler(int irq, void *dev_id)
 	int i;
 	uint64_t timestamp;
 
+	/* increment usage count to prevent suspend */
+	pm_runtime_get_sync(&glasshub->i2c_client->dev);
+
 	/* clear in-service flag */
 	timestamp = glasshub->irq_timestamp;
 	set_bit(FLAG_HANDLER_RUNNING, &glasshub->flags);
@@ -592,9 +595,9 @@ static irqreturn_t glasshub_threaded_irq_handler(int irq, void *dev_id)
 	mutex_lock(&glasshub->device_lock);
 
 	/* ignore interrupt if driver is suspended, this will cause further IRQ's to be ignored */
-	if (test_bit(FLAG_DEVICE_SUSPENDED, &glasshub->flags)) {
+	if (pm_runtime_suspended(&glasshub->i2c_client->dev)) {
 		dev_err(&glasshub->i2c_client->dev,
-				"%s: Ignoring pending interrupt because device is suspended\n",
+				"%s: Ignore interrupt, device suspended\n",
 				__FUNCTION__);
 		goto Exit;
 	}
@@ -602,7 +605,7 @@ static irqreturn_t glasshub_threaded_irq_handler(int irq, void *dev_id)
 	/* just in case the glasshub was reset after scheduling this handler */
 	if (!test_bit(FLAG_DEVICE_BOOTED, &glasshub->flags)) {
 		dev_err(&glasshub->i2c_client->dev,
-				"%s: Ignoring pending interrupt because device is disabled\n",
+				"%s: Ignore interrupt, device disabled\n",
 				__FUNCTION__);
 		goto Exit;
 	}
@@ -753,6 +756,9 @@ Error:
 Exit:
 	mutex_unlock(&glasshub->device_lock);
 	clear_bit(FLAG_HANDLER_RUNNING, &glasshub->flags);
+
+	/* decrement usage count to allow suspend */
+	pm_runtime_put_sync(&glasshub->i2c_client->dev);
 	return IRQ_HANDLED;
 }
 
@@ -772,6 +778,7 @@ static irqreturn_t glasshub_irq_handler(int irq, void *dev_id)
 
 	/* save timestamp for threaded handler and schedule it */
 	glasshub->irq_timestamp = read_robust_clock();
+	pm_request_resume(&glasshub->i2c_client->dev);
 	return IRQ_WAKE_THREAD;
 
 Handled:
@@ -2342,8 +2349,11 @@ static int __devinit glasshub_probe(struct i2c_client *i2c_client,
 	}
 
 	/* setup the device */
+	pm_runtime_set_active(&i2c_client->dev);
+	pm_runtime_enable(&i2c_client->dev);
+	pm_runtime_get(&i2c_client->dev);
 	if (glasshub_setup(glasshub)) {
-		goto err_out;
+		goto put_and_err_out;
 	}
 
 	/* store driver data into device private structure */
@@ -2358,7 +2368,7 @@ static int __devinit glasshub_probe(struct i2c_client *i2c_client,
 	if (rc) {
 		dev_err(&glasshub->i2c_client->dev, "%s Unable to create sysfs class files\n",
 				__FUNCTION__);
-		goto err_out;
+		goto put_and_err_out;
 	}
 
 	/* create sysfs files unless running the special bootflasher app */
@@ -2367,11 +2377,15 @@ static int __devinit glasshub_probe(struct i2c_client *i2c_client,
 		if (rc) {
 			dev_err(&glasshub->i2c_client->dev, "%s Unable to create sysfs class files\n",
 					__FUNCTION__);
-			goto err_out;
+			goto put_and_err_out;
 		}
 	}
 	dev_info(&i2c_client->dev, "%s: Probe successful\n", __FUNCTION__);
+	pm_runtime_put(&i2c_client->dev);
 	return 0;
+
+put_and_err_out:
+	pm_runtime_put(&i2c_client->dev);
 
 err_out:
 	dev_err(&i2c_client->dev, "%s: Probe failed\n", __FUNCTION__);
@@ -2384,27 +2398,17 @@ err_out:
 static int glasshub_suspend_noirq(struct device *dev)
 {
 	struct glasshub_data *glasshub = dev_get_drvdata(dev);
-	set_bit(FLAG_DEVICE_SUSPENDED, &glasshub->flags);
 	if (test_bit(FLAG_WAKE_HANDLER, &glasshub->flags)) goto abort_suspend;
 	if (test_bit(FLAG_HANDLER_RUNNING, &glasshub->flags)) goto abort_suspend;
 	return 0;
 
 abort_suspend:
 	dev_warn(dev, "%s: Suspend aborted due to pending IRQ handler\n", __FUNCTION__);
-	clear_bit(FLAG_DEVICE_SUSPENDED, &glasshub->flags);
 	return -EBUSY;
-}
-
-static int glasshub_resume_noirq(struct device *dev)
-{
-	struct glasshub_data *glasshub = dev_get_drvdata(dev);
-	clear_bit(FLAG_DEVICE_SUSPENDED, &glasshub->flags);
-	return 0;
 }
 
 static const struct dev_pm_ops glasshub_pmops = {
 	.suspend_noirq = glasshub_suspend_noirq,
-	.resume_noirq = glasshub_resume_noirq,
 };
 #define GLASSHUB_PMOPS (&glasshub_pmops)
 #else
