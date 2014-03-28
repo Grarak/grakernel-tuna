@@ -100,12 +100,9 @@ static ssize_t gps_elton_functional_show(struct device *dev,
 	struct gps_elton_data_s *gps_elton_data = dev_get_drvdata(dev);
 	unsigned functional = 0;
 
-#if 0
 	if (gps_elton_data && gps_elton_data->platform_data) {
 		functional = gps_elton_data->platform_data->functional;
 	}
-#endif
-
 	return snprintf(buf, PAGE_SIZE, "%u\n", functional);
 }
 
