@@ -1993,15 +1993,11 @@ static snd_pcm_sframes_t snd_pcm_lib_write1(struct snd_pcm_substream *substream,
 static int pcm_sanity_check(struct snd_pcm_substream *substream)
 {
 	struct snd_pcm_runtime *runtime;
-	static int already_warned = 0;
-
 	if (PCM_RUNTIME_CHECK(substream))
 		return -ENXIO;
 	/* TODO: consider and -EINVAL here */
-	if (substream->hw_no_buffer && !already_warned) {
+	if (substream->hw_no_buffer)
 		snd_printd("%s: warning this PCM is host less\n", __func__);
-		already_warned = 1;
-	}
 	runtime = substream->runtime;
 	if (snd_BUG_ON(!substream->ops->copy && !runtime->dma_area))
 		return -EINVAL;
