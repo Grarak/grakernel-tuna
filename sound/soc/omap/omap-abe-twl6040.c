@@ -762,7 +762,6 @@ static struct snd_soc_dai_link omap_abe_dai_link[] = {
 
 		.dynamic = 1, /* BE is dynamic */
 		.trigger = {SND_SOC_DPCM_TRIGGER_BESPOKE, SND_SOC_DPCM_TRIGGER_BESPOKE},
-		.no_host_mode = SND_SOC_DAI_LINK_OPT_HOST,
 	},
 	{
 		.name = "OMAP ABE Tones Playback",
@@ -1196,7 +1195,6 @@ static struct snd_soc_dai_link omap_abe_no_dmic_dai[] = {
 
 		.dynamic = 1, /* BE is dynamic */
 		.trigger = {SND_SOC_DPCM_TRIGGER_BESPOKE, SND_SOC_DPCM_TRIGGER_BESPOKE},
-		.no_host_mode = SND_SOC_DAI_LINK_OPT_HOST,
 	},
 	{
 		.name = "OMAP ABE Tones Playback",
