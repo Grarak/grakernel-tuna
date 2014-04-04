@@ -68,6 +68,16 @@ struct omap_dispc_isr_data {
 	u32			mask;
 };
 
+static int vsync_divider = 6;
+
+void dispc_set_vsync_divider(int divider) {
+	vsync_divider = divider;
+}
+
+int dispc_get_vsync_divider(void) {
+	return vsync_divider;
+}
+
 #define REG_GET(idx, start, end) \
 	FLD_GET(dispc_read_reg(idx), start, end)
 
@@ -3769,6 +3779,7 @@ static void print_irq_status(u32 status)
  * clock later in the function. */
 static irqreturn_t omap_dispc_irq_handler(int irq, void *arg)
 {
+	static int vsync_counter = 0;
 	int i;
 	u32 irqstatus, irqenable;
 	u32 handledirqs = 0;
@@ -3810,6 +3821,15 @@ static irqreturn_t omap_dispc_irq_handler(int irq, void *arg)
 			sizeof(registered_isr));
 
 	spin_unlock(&dispc.irq_lock);
+
+	/* Only handle 1 out of every vsync_divider vsyncs */
+	if (irqstatus & DISPC_IRQ_VSYNC2 && vsync_divider > 1) {
+		if (++vsync_counter % vsync_divider) {
+			irqstatus &= ~DISPC_IRQ_VSYNC2;
+		} else {
+			vsync_counter = 0;
+		}
+	}
 
 	for (i = 0; i < DISPC_MAX_NR_ISRS; i++) {
 		isr_data = &registered_isr[i];

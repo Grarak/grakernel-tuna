@@ -591,7 +591,6 @@ struct omap_dss_device panel_notle_device = {
         .data                     = &panel_notle,
         .phy.dpi.data_lines       = 24,
         .channel                  = OMAP_DSS_CHANNEL_LCD2,
-        .vsync_gpio               = -1,
         .panel = {
                 .timings = {
                         .x_res = 640,
@@ -2206,9 +2205,9 @@ static void __init notle_init(void)
         }
 
         if ( notle_version_before(V1_EVT2) ) {
-            omap_emif_set_device_details(1, &lpddr2_elpida_2G_S4_x2_info, lpddr2_elpida_2G_S4_timings, ARRAY_SIZE(lpddr2_elpida_2G_S4_timings), 
+            omap_emif_set_device_details(1, &lpddr2_elpida_2G_S4_x2_info, lpddr2_elpida_2G_S4_timings, ARRAY_SIZE(lpddr2_elpida_2G_S4_timings),
                                          &lpddr2_elpida_S4_min_tck, NULL);
-            omap_emif_set_device_details(2, &lpddr2_elpida_2G_S4_x2_info, lpddr2_elpida_2G_S4_timings, ARRAY_SIZE(lpddr2_elpida_2G_S4_timings), 
+            omap_emif_set_device_details(2, &lpddr2_elpida_2G_S4_x2_info, lpddr2_elpida_2G_S4_timings, ARRAY_SIZE(lpddr2_elpida_2G_S4_timings),
                                          &lpddr2_elpida_S4_min_tck, NULL);
 
             omap4_mux_init(evt1_board_mux, evt1_board_wkup_mux, package);

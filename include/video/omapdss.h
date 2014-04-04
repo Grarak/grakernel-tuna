@@ -57,6 +57,9 @@
 struct omap_dss_device;
 struct omap_overlay_manager;
 
+void dispc_set_vsync_divider(int divider);
+int dispc_get_vsync_divider(void);
+
 enum omap_display_type {
 	OMAP_DISPLAY_TYPE_NONE		= 0,
 	OMAP_DISPLAY_TYPE_DPI		= 1 << 0,
@@ -762,7 +765,6 @@ struct omap_dss_device {
 	} ctrl;
 
 	int reset_gpio;
-	int vsync_gpio;
 	bool skip_init;
 	int max_backlight_level;
 

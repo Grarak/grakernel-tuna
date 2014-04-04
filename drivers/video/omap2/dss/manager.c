@@ -101,6 +101,30 @@ put_device:
 	return r ? r : size;
 }
 
+static ssize_t manager_vsync_divider_show(struct omap_overlay_manager *mgr,
+						char *buf)
+{
+	return snprintf(buf, PAGE_SIZE, "%d\n", dispc_get_vsync_divider());
+}
+
+static ssize_t manager_vsync_divider_store(struct omap_overlay_manager *mgr,
+						const char *buf, size_t size)
+{
+	u32 divider;
+
+	if (sscanf(buf, "%d", &divider) != 1)
+		return -EINVAL;
+
+	if (!divider) {
+		DSSERR("invalid vsync divider: %d\n", divider);
+		return -EINVAL;
+	}
+
+	dispc_set_vsync_divider(divider);
+
+	return size;
+}
+
 static ssize_t manager_default_color_show(struct omap_overlay_manager *mgr,
 					  char *buf)
 {
@@ -516,6 +540,8 @@ struct manager_attribute {
 static MANAGER_ATTR(name, S_IRUGO, manager_name_show, NULL);
 static MANAGER_ATTR(display, S_IRUGO|S_IWUSR,
 		manager_display_show, manager_display_store);
+static MANAGER_ATTR(vsync_divider, S_IRUGO|S_IWUSR,
+		manager_vsync_divider_show, manager_vsync_divider_store);
 static MANAGER_ATTR(default_color, S_IRUGO|S_IWUSR,
 		manager_default_color_show, manager_default_color_store);
 static MANAGER_ATTR(trans_key_type, S_IRUGO|S_IWUSR,
@@ -545,6 +571,7 @@ static MANAGER_ATTR(gamma_table, S_IRUGO|S_IWUSR,
 static struct attribute *manager_sysfs_attrs[] = {
 	&manager_attr_name.attr,
 	&manager_attr_display.attr,
+	&manager_attr_vsync_divider.attr,
 	&manager_attr_default_color.attr,
 	&manager_attr_trans_key_type.attr,
 	&manager_attr_trans_key_value.attr,
