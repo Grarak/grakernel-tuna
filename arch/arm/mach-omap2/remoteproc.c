@@ -29,6 +29,7 @@
 #include <plat/iommu.h>
 #include <plat/omap-pm.h>
 #include <plat/dvfs.h>
+#include <plat/common.h>
 
 #include "cm1_44xx.h"
 #include "cm2_44xx.h"
@@ -337,7 +338,10 @@ static int __init omap_rproc_init(void)
 
 #ifdef CONFIG_MACH_NOTLE
 		// Use the 2GB firmware for 2GB devices.
-		if (__get_notle_memsize() == 2048) {
+		// omap_total_ram_size returns size in bytes, lets shift this down by
+		// 20 and convert this to megabytes. V1 devices should not have more
+		// than 1024 megabytes of RAM.
+		if ((omap_total_ram_size() >> 20) > 1024) {
 			omap4_rproc_data[i].firmware = omap4_rproc_data[i].firmware_2gb;
 		}
 #endif

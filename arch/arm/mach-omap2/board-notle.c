@@ -2390,7 +2390,6 @@ static void __init notle_reserve(void)
     rproc_config.ipu_address = ipu_heap_addr;
     rproc_config.ipu_size    = ipu_heap_size;
 
-    omap_init_ram_size();
     omap_ram_console_init(OMAP_RAM_CONSOLE_START_DEFAULT,
             OMAP_RAM_CONSOLE_SIZE_DEFAULT);
 
