@@ -69,7 +69,7 @@ if [ -e arch/arm/boot/zImage ]; then
 		git pull
 		cd ..
 	else
-		git clone git@github.com:RomSwitchers/RomSwitcher-tuna.git -b master romswitcher
+		git clone git@github.com:Grarak/RomSwitcher-tuna.git -b master romswitcher
 	fi
 
 	find -name "zImage" -exec cp -vf {} romswitcher/ \;
