@@ -77,6 +77,7 @@ if [ -e arch/arm/boot/zImage ]; then
 
 	cd romswitcher
 
+	echo $version > boot.img-ramdisk/sbin/version
 	./build.sh
    
         echo -e "${bldcya} Finished!! ${txtrst}"
