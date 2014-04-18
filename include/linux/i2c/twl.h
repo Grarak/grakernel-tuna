@@ -787,6 +787,22 @@ struct twl4030_system_config {
 	u8 group;
 };
 
+struct twl4030_codec_audio_data {
+	struct twl4030_codec_audio_data		*audio;
+	unsigned int digimic_delay; /* in ms */
+	unsigned int ramp_delay_value;
+	unsigned int offset_cncl_path;
+	unsigned int check_defaults:1;
+	unsigned int reset_registers:1;
+	unsigned int hs_extmute:1;
+	u16 hs_left_step;
+	u16 hs_right_step;
+	u16 hf_left_step;
+	u16 hf_right_step;
+	u16 ep_step;
+	void (*set_hs_extmute)(int mute);
+};
+
 struct twl4030_power_data {
 	struct twl4030_script **scripts;	/* used in TWL4030 only */
 	unsigned num;				/* used in TWL4030 only */
@@ -828,6 +844,18 @@ struct twl4030_codec_data {
 	u16 hf_right_step;
 	u16 ep_step;
 	void (*set_hs_extmute)(int mute);
+
+	unsigned int	audio_mclk;
+	struct twl4030_codec_audio_data		*audio;
+	struct twl4030_codec_vibra_data		*vibra;
+
+	/* twl6040 */
+	int audpwron_gpio;	/* audio power-on gpio */
+	int naudint_irq;	/* audio interrupt */
+	unsigned int irq_base;
+	int (*get_ext_clk32k)(void);
+	void (*put_ext_clk32k)(void);
+	int (*set_ext_clk32k)(bool on);
 };
 
 struct twl4030_vibra_data {
@@ -881,6 +909,7 @@ struct twl4030_platform_data {
 	struct twl4030_usb_data			*usb;
 	struct twl4030_power_data		*power;
 	struct twl4030_audio_data		*audio;
+	struct twl4030_codec_data		*codec;
 
 	struct twl4030_charger_platform_data *charger;
 	struct twl4030_battery_platform_data *battery;

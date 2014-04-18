@@ -140,6 +140,11 @@ enum omap_panel_config {
 	OMAP_DSS_LCD_TFT		= 1<<20,
 };
 
+enum omap_dss_dsi_type {
+	OMAP_DSS_DSI_TYPE_CMD_MODE = 0,
+	OMAP_DSS_DSI_TYPE_VIDEO_MODE,
+};
+
 enum omap_dss_venc_type {
 	OMAP_DSS_VENC_TYPE_COMPOSITE,
 	OMAP_DSS_VENC_TYPE_SVIDEO,
@@ -685,6 +690,7 @@ struct omap_dss_device {
 		} sdi;
 
 		struct {
+			enum omap_dss_dsi_type type;
 			u8 clk_lane;
 			u8 clk_pol;
 			u8 data1_lane;

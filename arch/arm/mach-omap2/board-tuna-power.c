@@ -25,6 +25,7 @@
 #include "board-tuna.h"
 #include "mux.h"
 #include "pm.h"
+#include "twl-common.h"
 
 /* These will be different on pre-lunchbox, lunchbox, and final */
 #define GPIO_CHARGING_N		83

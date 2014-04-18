@@ -30,7 +30,8 @@
 #include <linux/reboot.h>
 
 #include <mach/hardware.h>
-#include <mach/omap4-common.h>
+#include <asm/hardware/gic.h>
+#include "common-board-devices.h"
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
 #include <asm/mach/map.h>
@@ -39,13 +40,14 @@
 #include <plat/common.h>
 #include <plat/usb.h>
 #include <plat/mmc.h>
-#include "timer-gp.h"
+//#include "timer-gp.h"
 
 #include "omap4-sar-layout.h"
 #include "hsmmc.h"
 #include "control.h"
 #include "mux.h"
 #include "board-tuna.h"
+#include "common.h"
 
 #define GPIO_AUD_PWRON		127
 #define GPIO_AUD_PWRON_TORO_V1	20
@@ -128,8 +130,7 @@ static struct platform_device *tuna_devices[] __initdata = {
 
 static void __init tuna_init_early(void)
 {
-	omap2_init_common_infrastructure();
-	omap2_init_common_devices(NULL, NULL);
+	omap4430_init_early();
 }
 
 static struct omap_musb_board_data musb_board_data = {
@@ -451,11 +452,11 @@ static inline void board_serial_init(void)
 	bdata.pads_cnt  = 0;
 	bdata.id        = 0;
 	/* pass dummy data for UART1 */
-	omap_serial_init_port(&bdata);
+	omap_serial_init_port(&bdata, NULL);
 
-	omap_serial_init_port(&serial2_data);
-	omap_serial_init_port(&serial3_data);
-	omap_serial_init_port(&serial4_data);
+	omap_serial_init_port(&serial2_data, NULL);
+	omap_serial_init_port(&serial3_data, NULL);
+	omap_serial_init_port(&serial4_data, NULL);
 }
 #else
 #define board_mux	NULL
@@ -572,7 +573,7 @@ static void __init tuna_init(void)
 	tuna_i2c_init();
 	platform_add_devices(tuna_devices, ARRAY_SIZE(tuna_devices));
 	board_serial_init();
-	omap2_hsmmc_init(mmc);
+	omap_hsmmc_init(mmc);
 	usb_musb_init(&musb_board_data);
 	omap4_tuna_display_init();
 	omap4_tuna_input_init();
@@ -589,11 +590,12 @@ static void __init tuna_map_io(void)
 
 MACHINE_START(TUNA, "Tuna")
 	/* Maintainer: Google, Inc */
-	.boot_params	= 0x80000100,
+	.atag_offset	= 0x100,
 	.reserve	= omap_reserve,
 	.map_io		= tuna_map_io,
 	.init_early	= tuna_init_early,
 	.init_irq	= gic_init_irq,
+	.handle_irq	= gic_handle_irq,
 	.init_machine	= tuna_init,
-	.timer		= &omap_timer,
+	.timer		= &omap4_timer,
 MACHINE_END
