@@ -429,7 +429,7 @@ static int s6e8aa0_power_on(struct omap_dss_device *dssdev)
 		msleep(100);
 		s6e8aa0_config(dssdev);
 
-		dsi_video_mode_enable(dssdev, 0x3E); /* DSI_DT_PXLSTREAM_24BPP_PACKED; */
+		dsi_enable_video_output(dssdev, 0x3E); /* DSI_DT_PXLSTREAM_24BPP_PACKED; */
 
 		s6->enabled = 1;
 	}
@@ -539,12 +539,8 @@ static int s6e8aa0_update(struct omap_dss_device *dssdev,
 		goto err;
 	}
 
-	r = omap_dsi_prepare_update(dssdev, &x, &y, &w, &h, true);
-	if (r)
-		goto err;
-
 	/* We use VC(0) for VideoPort Data and VC(1) for commands */
-	r = omap_dsi_update(dssdev, 0, x, y, w, h, s6e8aa0_framedone_cb, dssdev);
+	r = omap_dsi_update(dssdev, 0, s6e8aa0_framedone_cb, dssdev);
 	if (r)
 		goto err;
 

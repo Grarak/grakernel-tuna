@@ -167,6 +167,12 @@ enum omap_display_caps {
 	OMAP_DSS_DISPLAY_CAP_TEAR_ELIM		= 1 << 1,
 };
 
+enum omap_dss_update_mode {
+	OMAP_DSS_UPDATE_DISABLED = 0,
+	OMAP_DSS_UPDATE_AUTO,
+	OMAP_DSS_UPDATE_MANUAL,
+};
+
 enum omap_dss_display_state {
 	OMAP_DSS_DISPLAY_DISABLED = 0,
 	OMAP_DSS_DISPLAY_ACTIVE,
@@ -662,6 +668,9 @@ struct omap_overlay_manager {
 	int (*set_ovl)(struct omap_overlay_manager *mgr);
 	int (*wb_apply)(struct omap_overlay_manager *mgr,
 		struct omap_writeback *wb);
+
+	int (*enable)(struct omap_overlay_manager *mgr);
+	int (*disable)(struct omap_overlay_manager *mgr);
 };
 
 struct omap_dss_device {
@@ -800,6 +809,9 @@ struct omap_dss_device {
 	int (*set_backlight)(struct omap_dss_device *dssdev, int level);
 	int (*get_backlight)(struct omap_dss_device *dssdev);
 
+	int (*enable)(struct omap_overlay_manager *mgr);
+	int (*disable)(struct omap_overlay_manager *mgr);
+
 	struct omap_video_timings *dispc_timings;
 };
 
@@ -821,6 +833,11 @@ struct omap_dss_driver {
 	int (*suspend)(struct omap_dss_device *display);
 	int (*resume)(struct omap_dss_device *display);
 	int (*run_test)(struct omap_dss_device *display, int test);
+
+	int (*set_update_mode)(struct omap_dss_device *dssdev,
+			enum omap_dss_update_mode);
+	enum omap_dss_update_mode (*get_update_mode)(
+			struct omap_dss_device *dssdev);
 
 	int (*update)(struct omap_dss_device *dssdev,
 			       u16 x, u16 y, u16 w, u16 h);
