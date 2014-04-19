@@ -389,7 +389,7 @@ static void __init tuna_init(void)
 	usb_musb_init(&musb_board_data);
 	omap4_tuna_display_init();
 	omap4_tuna_input_init();
-	omap4_tuna_nfc_init();
+	//omap4_tuna_nfc_init();
 	omap4_tuna_power_init();
 	omap4_tuna_sensors_init();
 #ifdef CONFIG_OMAP_HSI_DEVICE
