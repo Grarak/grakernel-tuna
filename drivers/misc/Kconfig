@@ -582,5 +582,3 @@ source "drivers/misc/altera-stapl/Kconfig"
 source "drivers/misc/mpu/Kconfig"
 source "drivers/misc/modem_if/Kconfig"
 endmenu
-
-endif # MISC_DEVICES
