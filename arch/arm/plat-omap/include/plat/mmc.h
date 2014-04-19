@@ -16,6 +16,7 @@
 #include <linux/pm_qos.h>
 #include <linux/mmc/host.h>
 
+#include <asm/mach/mmc.h>
 #include <plat/board.h>
 
 #define OMAP15XX_NR_MMC		1

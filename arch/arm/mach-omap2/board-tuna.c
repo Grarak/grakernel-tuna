@@ -190,7 +190,7 @@ static struct omap2_hsmmc_info mmc[] = {
 		.gpio_cd	= -EINVAL,
 		.ocr_mask	= MMC_VDD_165_195 | MMC_VDD_20_21,
 		.nonremovable	= false,
-		//.mmc_data	= &tuna_wifi_data,
+		.mmc_data	= &tuna_wifi_data,
 	},
 	{}	/* Terminator */
 };
@@ -590,7 +590,7 @@ static void __init tuna_init(void)
 		omap_mux_init_gpio(158, OMAP_PIN_INPUT_PULLUP);
 	}
 
-	//tuna_wlan_init();
+	tuna_wlan_init();
 	tuna_audio_init();
 	tuna_i2c_init();
 	platform_add_devices(tuna_devices, ARRAY_SIZE(tuna_devices));
