@@ -19,6 +19,7 @@
 #include <linux/delay.h>
 #include <linux/platform_device.h>
 #include <linux/printk.h>
+#include <linux/stat.h>
 
 #include "mux.h"
 
