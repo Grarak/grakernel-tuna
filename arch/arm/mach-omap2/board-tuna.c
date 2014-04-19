@@ -50,7 +50,9 @@
 #include "board-tuna.h"
 #include "common.h"
 
-#define TUNA_RAMCONSOLE_START	(PLAT_PHYS_OFFSET + SZ_512M)
+#define DEFAULT_PHYS_ADDR_OFFSET 0x80000000 /* Default RAM start address */
+
+#define TUNA_RAMCONSOLE_START	(DEFAULT_PHYS_ADDR_OFFSET + SZ_512M)
 #define TUNA_RAMCONSOLE_SIZE	SZ_2M
 
 #define GPIO_AUD_PWRON		127
