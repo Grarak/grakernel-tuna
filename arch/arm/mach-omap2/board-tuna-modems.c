@@ -18,7 +18,8 @@
 #include <linux/gpio.h>
 
 /* inlcude platform specific file */
-#include <mach/omap4-common.h>
+#include "common-board-devices.h"
+#include "common.h"
 #include <linux/platform_data/modem.h>
 #include "mux.h"
 #include "board-tuna.h"
