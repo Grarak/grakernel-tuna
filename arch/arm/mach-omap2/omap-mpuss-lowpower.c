@@ -500,7 +500,7 @@ int omap_enter_lowpower(unsigned int cpu, unsigned int power_state)
 			__raw_writel(0x0, base);
 	}
 
-#ifdef CONFIG_MACH_NOTLE
+#if defined(CONFIG_MACH_NOTLE) || defined(CONFIG_MACH_TUNA)
 	omap_clear_target_disable_failure_count();
 #endif
 	cpu_clear_prev_logic_pwrst(cpu);
@@ -554,7 +554,7 @@ int omap_enter_lowpower(unsigned int cpu, unsigned int power_state)
 	    omap_wakeupgen_check_interrupts("Aborting Suspend"))
 		goto abort_suspend;
 
-#ifdef CONFIG_MACH_NOTLE
+#if defined(CONFIG_MACH_NOTLE) || defined(CONFIG_MACH_TUNA)
 	/* WORKAROUND: Check and see if there are any power domain(s) that fail to be disabled.
 	 * This is triggered by generic pm suspend triggered by the omap_dec_mpu_core_pwrdm_usecount() call.
 	 * If failures are detected, abort the suspend instead of leaving a large current

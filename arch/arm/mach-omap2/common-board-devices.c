@@ -223,7 +223,7 @@ struct lpddr2_min_tck lpddr2_elpida_S4_min_tck = {
  * AC timings for Elpida LPDDR2-s4 4Gb memory device
  */
 
-#ifdef CONFIG_MACH_NOTLE
+#if defined(CONFIG_MACH_NOTLE) || defined(CONFIG_MACH_TUNA)
 struct lpddr2_timings lpddr2_elpida_4G_S4_timings[] = {
 	/* Speed bin 800(400 MHz) */
 	[0] = {
