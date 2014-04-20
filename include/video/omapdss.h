@@ -308,7 +308,8 @@ int omap_rfbi_enable_te(bool enable, unsigned line);
 int omap_dsi_prepare_update(struct omap_dss_device *dssdev,
 				    u16 *x, u16 *y, u16 *w, u16 *h,
 				    bool enlarge_update_area);
-
+int omap_dsi_update(struct omap_dss_device *dssdev, int channel,
+		void (*callback)(int, void *), void *data);
 int omap_rfbi_setup_te(enum omap_rfbi_te_mode mode,
 			     unsigned hs_pulse_time, unsigned vs_pulse_time,
 			     int hs_pol_inv, int vs_pol_inv, int extif_div);

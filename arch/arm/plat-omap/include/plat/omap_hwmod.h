@@ -647,7 +647,7 @@ int omap_hwmod_pad_wakeup_handler(struct omap_hwmod *oh, int pad_idx,
 
 const char *omap_hwmod_get_main_clk(struct omap_hwmod *oh);
 
-#ifdef CONFIG_MACH_NOTLE
+#if defined(CONFIG_MACH_NOTLE) || defined(CONFIG_MACH_TUNA)
 void omap_increment_target_disable_failure_count(void);
 int omap_target_disable_failure_count(void);
 void omap_clear_target_disable_failure_count(void);

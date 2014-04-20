@@ -138,7 +138,7 @@ static inline bool timespec_valid_strict(const struct timespec *ts)
 	return true;
 }
 
-#ifdef CONFIG_MACH_NOTLE
+#if defined(CONFIG_MACH_NOTLE) || defined(CONFIG_MACH_TUNA)
 extern u64 read_robust_clock(void);
 #else
 static u64 read_robust_clock(void) { return 0; }

@@ -173,7 +173,7 @@ struct hwmod_ops {
 };
 
 /* Keep track of how many omap4 target failures happen since last clear */
-#ifdef CONFIG_MACH_NOTLE
+#if defined(CONFIG_MACH_NOTLE) || defined(CONFIG_MACH_TUNA)
 static int omap_target_disable_failures = 0;
 static DEFINE_MUTEX(omap_target_disable_count_lock);
 #endif
@@ -830,7 +830,7 @@ static void _enable_module(struct omap_hwmod *oh)
 				   oh->prcm.omap4.clkctrl_offs);
 }
 
-#ifdef CONFIG_MACH_NOTLE
+#if defined(CONFIG_MACH_NOTLE) || defined(CONFIG_MACH_TUNA)
 /**
  * omap_increment_target_disable_failure_count - increment the failures count.
  */
