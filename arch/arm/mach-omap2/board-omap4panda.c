@@ -208,37 +208,6 @@ static struct regulator_consumer_supply omap4_panda_vmmc_supply[] = {
 	},
 };
 
-static struct regulator_consumer_supply omap4_panda_vmmc5_supply = {
-	.supply = "vmmc",
-	.dev_name = "omap_hsmmc.4",
-};
-
-static struct regulator_init_data panda_vmmc5 = {
-	.constraints = {
-		.valid_ops_mask = REGULATOR_CHANGE_STATUS,
-	},
-	.num_consumer_supplies = 1,
-	.consumer_supplies = &omap4_panda_vmmc5_supply,
-};
-
-static struct fixed_voltage_config panda_vwlan = {
-	.supply_name = "vwl1271",
-	.microvolts = 1800000, /* 1.8V */
-	.gpio = GPIO_WIFI_PMENA,
-	.startup_delay = 70000, /* 70msec */
-	.enable_high = 1,
-	.enabled_at_boot = 0,
-	.init_data = &panda_vmmc5,
-};
-
-static struct platform_device omap_vwlan_device = {
-	.name		= "reg-fixed-voltage",
-	.id		= 1,
-	.dev = {
-		.platform_data = &panda_vwlan,
-	},
-};
-
 struct wl12xx_platform_data omap_panda_wlan_data  __initdata = {
 	.irq = OMAP_GPIO_IRQ(GPIO_WIFI_IRQ),
 	/* PANDA ref clock is 38.4 MHz */
