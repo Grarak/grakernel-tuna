@@ -29,6 +29,8 @@
 #include <linux/wl12xx.h>
 #include <linux/reboot.h>
 #include <linux/memblock.h>
+#include <linux/omap4_duty_cycle_governor.h>
+#include <linux/omap_die_governor.h>
 
 #include <mach/hardware.h>
 #include <asm/hardware/gic.h>
@@ -40,15 +42,19 @@
 
 #include <plat/board.h>
 #include <plat/common.h>
+#include <plat/drm.h>
 #include <plat/usb.h>
 #include <plat/mmc.h>
-//#include "timer-gp.h"
+#include <plat/omap-pm.h>
+#include <plat/omap_apps_brd_id.h>
 
 #include "omap4-sar-layout.h"
 #include "hsmmc.h"
 #include "control.h"
+#include "pm.h"
 #include "mux.h"
 #include "board-tuna.h"
+#include "omap4_ion.h"
 
 #define DEFAULT_PLAT_PHYS_OFFSET 0x80000000 /* Default RAM start address */
 
@@ -196,11 +202,98 @@ static struct omap2_hsmmc_info mmc[] = {
 	{}	/* Terminator */
 };
 
+#ifdef CONFIG_OMAP4_DUTY_CYCLE_GOVERNOR
+
+static struct pcb_section omap4_duty_governor_pcb_sections[] = {
+	{
+		.pcb_temp_level			= DUTY_GOVERNOR_DEFAULT_TEMP,
+		.max_opp			= 1200000,
+		.duty_cycle_enabled		= true,
+		.tduty_params = {
+			.nitro_rate		= 1200000,
+			.cooling_rate		= 1008000,
+			.nitro_interval		= 20000,
+			.nitro_percentage	= 24,
+		},
+	},
+};
+
+static void init_duty_governor(void)
+{
+	omap4_duty_pcb_section_reg(omap4_duty_governor_pcb_sections,
+				   ARRAY_SIZE
+				   (omap4_duty_governor_pcb_sections));
+}
+#else
+static void init_duty_governor(void){}
+#endif /*CONFIG_OMAP4_DUTY_CYCLE*/
+
+/* Initial set of thresholds for different thermal zones */
+static struct omap_thermal_zone thermal_zones[] = {
+	OMAP_THERMAL_ZONE("safe", 0, 25000, 65000, 250, 1000, 400),
+	OMAP_THERMAL_ZONE("monitor", 0, 60000, 80000, 250, 250,	250),
+	OMAP_THERMAL_ZONE("alert", 0, 75000, 90000, 250, 250, 150),
+	OMAP_THERMAL_ZONE("critical", 1, 85000,	115000,	250, 250, 50),
+};
+
+static struct omap_die_governor_pdata omap_gov_pdata = {
+	.zones = thermal_zones,
+	.zones_num = ARRAY_SIZE(thermal_zones),
+};
+
 static struct regulator_consumer_supply tuna_vaux3_supplies[] = {
 	{
 		.supply = "vlcd",
 	},
 };
+
+static int omap4_twl6030_hsmmc_late_init(struct device *dev)
+{
+	int ret = 0;
+	struct platform_device *pdev = container_of(dev,
+				struct platform_device, dev);
+	struct omap_mmc_platform_data *pdata = dev->platform_data;
+
+	if (!pdata) {
+		dev_err(dev, "%s: NULL platform data\n", __func__);
+		return -EINVAL;
+	}
+	/* Setting MMC1 Card detect Irq */
+	if (pdev->id == 0) {
+		ret = twl6030_mmc_card_detect_config();
+		 if (ret)
+			dev_err(dev, "%s: Error card detect config(%d)\n",
+				__func__, ret);
+		 else
+			pdata->slots[0].card_detect = twl6030_mmc_card_detect;
+	}
+	return ret;
+}
+
+static __init void omap4_twl6030_hsmmc_set_late_init(struct device *dev)
+{
+	struct omap_mmc_platform_data *pdata;
+
+	/* dev can be null if CONFIG_MMC_OMAP_HS is not set */
+	if (!dev) {
+		pr_err("Failed omap4_twl6030_hsmmc_set_late_init\n");
+		return;
+	}
+	pdata = dev->platform_data;
+
+	pdata->init =	omap4_twl6030_hsmmc_late_init;
+}
+
+static int __init omap4_twl6030_hsmmc_init(struct omap2_hsmmc_info *controllers)
+{
+	struct omap2_hsmmc_info *c;
+	omap_hsmmc_init(controllers);
+	for (c = controllers; c->mmc; c++) {
+		omap4_twl6030_hsmmc_set_late_init(&c->pdev->dev);
+        }
+
+	return 0;
+}
 
 static struct regulator_init_data tuna_vaux3 = {
 	.constraints = {
@@ -358,6 +451,8 @@ static void __init tuna_init(void)
 
 	omap4_tuna_init_hw_rev();
 
+	omap_create_board_props();
+
 	register_reboot_notifier(&tuna_reboot_notifier);
 
 	if (omap4_tuna_final_gpios()) {
@@ -404,17 +499,18 @@ static void __init tuna_init(void)
 	tuna_bt_init();
 	platform_add_devices(tuna_devices, ARRAY_SIZE(tuna_devices));
 	omap_serial_init();
-	omap_hsmmc_init(mmc);
+	omap4_twl6030_hsmmc_init(mmc);
 	usb_musb_init(&musb_board_data);
+	omap_init_dmm_tiler();
+	omap4_register_ion();
+	omap_die_governor_register_pdata(&omap_gov_pdata);
 	omap4_tuna_display_init();
 	omap4_tuna_input_init();
 	//omap4_tuna_nfc_init();
 	omap4_tuna_power_init();
 	omap4_tuna_sensors_init();
-#ifdef CONFIG_OMAP_HSI_DEVICE
-	if (TUNA_TYPE_MAGURO == omap4_tuna_get_type())
-		omap_hsi_init();
-#endif
+	omap_enable_smartreflex_on_init();
+	omap_pm_enable_off_mode();
 }
 
 static void __init tuna_reserve(void)
@@ -423,12 +519,18 @@ static void __init tuna_reserve(void)
 	memblock_remove(TUNA_RAMCONSOLE_START, TUNA_RAMCONSOLE_SIZE);
 }
 
+static void __init tuna_init_early(void)
+{
+	omap4430_init_early();
+	init_duty_governor();
+}
+
 MACHINE_START(TUNA, "Tuna")
 	/* Maintainer: Google, Inc */
 	.atag_offset	= 0x100,
 	.reserve	= tuna_reserve,
 	.map_io		= omap4_map_io,
-	.init_early	= omap4430_init_early,
+	.init_early	= tuna_init_early,
 	.init_irq	= gic_init_irq,
 	.handle_irq	= gic_handle_irq,
 	.init_machine	= tuna_init,

@@ -15,6 +15,7 @@
 #include <linux/err.h>
 #include <linux/gpio.h>
 #include <linux/kernel.h>
+#include <linux/leds.h>
 #include <linux/omapfb.h>
 #include <linux/regulator/consumer.h>
 
@@ -33,6 +34,32 @@
 
 #define TUNA_GPIO_MLCD_RST_LUNCHBOX	35
 #define TUNA_GPIO_MLCD_RST		23
+
+static struct gpio_led gpio_leds[] = {
+	{
+		.name			= "tunaboard::status1",
+		.default_trigger	= "heartbeat",
+		.gpio			= 7,
+	},
+	{
+		.name			= "tunaboard::status2",
+		.default_trigger	= "mmc0",
+		.gpio			= 8,
+	},
+};
+
+static struct gpio_led_platform_data gpio_led_info = {
+	.leds		= gpio_leds,
+	.num_leds	= ARRAY_SIZE(gpio_leds),
+};
+
+static struct platform_device tuna_disp_led = {
+		.name	=	"display_led",
+		.id	=	-1,
+		.dev	= {
+		.platform_data = &gpio_led_info,
+		},
+};
 
 static struct panel_generic_dpi_data tuna_lcd_panel = {
 	.name			= "samsung_ams452gn05",
@@ -70,6 +97,17 @@ static void tuna_oled_set_power(bool enable)
 static struct panel_s6e8aa0_data tuna_oled_data = {
 	.reset_gpio	= TUNA_GPIO_MLCD_RST,
 	.set_power	= tuna_oled_set_power,
+};
+
+struct omap_video_timings tuna_dispc_timings = {
+	.x_res = 720,
+	.y_res = 1080,
+	.hfp = 243,
+	.hsw = 9,
+	.hbp = 20,
+	.vfp = 6,
+	.vsw = 2,
+	.vbp = 4,
 };
 
 /* width: 58mm */
@@ -115,9 +153,21 @@ static struct omap_dss_device tuna_oled_device = {
 		},
 	},
 
+	.reset_gpio     = 102,
 	.channel		= OMAP_DSS_CHANNEL_LCD,
+	.dispc_timings = &tuna_dispc_timings,
 };
 
+static struct omapfb_platform_data tuna_fb_pdata = {
+        .mem_desc = {
+                .region_cnt = 1,
+                .region = {
+                        [0] = {
+                                .size = TUNA_FB_RAM_SIZE,
+                        },
+                },
+        },
+};
 
 static struct omap_dss_device *tuna_dss_devices[] = {
 	&tuna_oled_device,
@@ -188,6 +238,8 @@ void __init omap4_tuna_display_init(void)
 		dss_data = &tuna_dss_data;
 	}
 
+	platform_device_register(&tuna_disp_led);
+	omapfb_set_platform_data(&tuna_fb_pdata);
 	omap_vram_set_sdram_vram(TUNA_FB_RAM_SIZE, 0);
 	omap_display_init(dss_data);
 }
